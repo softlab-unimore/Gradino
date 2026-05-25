@@ -22,12 +22,12 @@ if __name__ == "__main__":
     os.makedirs(path, exist_ok=True)
 
     if generate_ablations:
-        samples, error_logs = mtautogen.run_ablations(num_tables=num_tables, num_samples=1, domain=domain, sequential=args["sequential"])
+        samples, error_logs = mtautogen.run_ablations(num_tables=num_tables, num_samples=50, domain=domain, sequential=args["sequential"])
         print(error_logs)
         for num_tables in samples:
             for k1 in samples[str(num_tables)]:
                 for k2 in samples[str(num_tables)][k1]:
-                    path_k1_k2 = os.path.join(path, str(num_tables), domain, k1, k2, "data.csv")
+                    path_k1_k2 = os.path.join(path, str(num_tables), domain, k1, k2, "exactly", "data.csv")
                     os.makedirs(os.path.dirname(path_k1_k2), exist_ok=True)
                     samples[str(num_tables)][k1][k2].to_csv(path_k1_k2, index=False)
     else:

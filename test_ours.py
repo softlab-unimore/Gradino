@@ -81,10 +81,17 @@ if __name__ == '__main__':
         filepath = os.path.join(args["model"].split("/")[-1].replace(".", "-"), args['filepath'].split("datasets/")[-1])
         to_save_path = os.path.join("results", "bird", f"{filepath.split('.')[0]}")
         method = df.iloc[0]['Method']
+    elif args["griqa"]:
+        filepath = os.path.join(args["model"].split("/")[-1].replace(".", "-"), args['filepath'].split("datasets/")[-1])
+        to_save_path = os.path.join("results", "griqa", f"{filepath.split('.')[0]}")
+        method = df.iloc[0]['Method']
     else:
         filepath = os.path.join(args["model"].split("/")[-1].replace(".", "-"), args['filepath'].split("datasets/")[-1])
         to_save_path = os.path.join("results", "ours", f"{filepath.split('.')[0]}")
         method = df.iloc[0]['Method']
+
+    if args["pot"]:
+        to_save_path = os.path.join(to_save_path, "pot_ablation")
 
     print(f"**** THE RESULTS WILL BE SAVED IN {to_save_path} DIR ****")
     predictions = []
@@ -102,7 +109,10 @@ if __name__ == '__main__':
         else:
             label = str(row['Label'])
         attr = {"question": question, "table": table}
-        result, logging = model.query(prompt, attr=attr)
+        if "gpt" in args["model"].lower() and args["pot"]:
+            result, logging = model.query_pot(prompt, attr=attr)
+        else:
+            result, logging = model.query(prompt, attr=attr)
         results.append(logging["text"])
         if i == 0:
             print(logging["text"])

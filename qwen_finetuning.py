@@ -8,11 +8,11 @@ from trl import SFTTrainer, SFTConfig
 import pandas as pd
 
 max_seq_length = 16384
-OUTPUT_DIR = "qwen35_9b_reasoning_finetuned_lora" # TODO: change path
+OUTPUT_DIR = "finetuned_models/qwen35_9b_reasoning_finetuned_lora"
 
 base_path = "results/ours/Qwen3-5-122B-A10B-FP8/multi-table/{num_tables}/environmental/{method}/{perturbation}/data/reasoning.csv"
 data_samples = []
-for num_tables in [2, 5]:
+for num_tables in [2, 3, 5, 10, 20]:
     for method in ["average", "sum", "superlative"]:
         for perturbation in ["unit_converted", "not_unit_converted"]:
             path = base_path.format(num_tables=num_tables, method=method, perturbation=perturbation)
@@ -60,7 +60,7 @@ dataset = DatasetDict({
 )"""
 
 model, tokenizer = FastLanguageModel.from_pretrained(
-    model_name = "Qwen/Qwen3.5-27B", # TODO: change model name
+    model_name = "Qwen/Qwen3.5-9B", # TODO: change model name
     max_seq_length = max_seq_length,
     load_in_4bit = False,
     load_in_16bit = True,
