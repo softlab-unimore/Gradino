@@ -17,20 +17,19 @@ def _rank_categorical_columns(df, categorical_cols, min_card=3, max_card=50, top
         if nunique < min_card:
             continue
 
-        # Prefer moderate cardinality and non-extreme skew
+        # prefering moderate cardinality and non-extreme skew
         top_mass = vc.iloc[:10].sum() / n if n else 0
         score = 0.0
 
-        # columns with too many unique values are usually bad for dense pivots
         if nunique <= max_card:
             score += 2.0
         else:
             score += max(0.0, 2.0 - nunique / 200.0)
 
-        # prefer columns where a few values cover much of the data
+        # prefering columns where a few values cover much of the data
         score += top_mass
 
-        # prefer columns that can plausibly form 3-10 categories
+        # prefering columns that can plausibly form 3-10 categories
         score += 1.0 if nunique >= 3 else 0.0
 
         scored.append((col, score, nunique))
@@ -104,7 +103,7 @@ def _trim_dense_submatrix(mat, min_rows=3, max_rows=10, min_cols=3, max_cols=10)
     if cur.shape[0] < min_rows or cur.shape[1] < min_cols:
         return None
 
-    # trim down to max sizes
+    # trimming down to max sizes
     while cur.shape[0] > max_rows or cur.shape[1] > max_cols:
         row_fill = cur.mean(axis=1)
         col_fill = cur.mean(axis=0)
@@ -125,7 +124,7 @@ def _trim_dense_submatrix(mat, min_rows=3, max_rows=10, min_cols=3, max_cols=10)
             col_idx = col_idx[keep]
             cur = cur[:, keep]
 
-    # improve density greedily
+    # improving density greedily
     improved = True
     while improved:
         improved = False
@@ -284,11 +283,11 @@ def find_densest_pivot(
     if best is None:
         return None
 
-    # Build the real pivot only once for the winner
+    # building the real pivot
     row_cols = best["row_cols"]
     col_cols = best["col_cols"]
 
-    # Decode selected pairs back to category values
+    # decoding selected pairs back to category values
     selected_row_pairs = []
     for a, b in best["row_pairs_codes"]:
         selected_row_pairs.append((

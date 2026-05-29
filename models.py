@@ -35,17 +35,12 @@ from copy import deepcopy
 
 from utils import is_float
 
-#pd.set_option('display.float_format', '{:.0f}'.format) # to avoid scientific notation in pandas
-
 SQL_TEMPLATES = {
     "extractive": """SELECT {target} FROM {table_name} WHERE {constraints};""",
     "comparative": """SELECT (SELECT {target} FROM {table_name} WHERE {constraints1}) {comparison} (SELECT {target} FROM {table_name} WHERE {constraints2}) as {target};""",
     "superlative": """SELECT {aggr}({target}) AS {target} FROM ({union_table});""",
     "sum": """SELECT {aggr}({target}) AS {target} FROM ({union_table});""",
     "average": """SELECT {aggr}({target}) AS {target} FROM ({union_table});""",
-    #returns NULL if there is a division by zero
-    #"percentage_change": """SELECT ((SELECT {target} FROM {table_name} WHERE {constraints1}) - (SELECT {target} FROM {table_name} WHERE {constraints2})) * 100.0 / NULLIF((SELECT {target} FROM {table_name} WHERE {constraints1}), 0) AS {target};""",
-    #"relational_comparative_col": """SELECT t1.{target} {comparison} t2.{target} FROM {table_name} t1, {table_name} t2 WHERE {constraints}""",
 }
 
 class MTAutoGen:
@@ -59,7 +54,6 @@ class MTAutoGen:
         self.sql_sampler = SQLSampler()
         self.perturber = Perturber()
         self.constrainer = Constrainer()
-        #self.unit_converter = UnitConverter()
         self.intra_ambiguous_perturber = IntraAmbiguousPerturber()
         self.num_perturbations = 1
         self.rnd = random.Random(-1)
@@ -72,9 +66,9 @@ class MTAutoGen:
             result: dict,
             num_columns: int,
     ) -> bool:
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
+        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, units, decimals = \
         result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-        result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
+        result["value_col"], result["unit_of_measurement"], result["number_of_decimals"]
 
         sanity = True
         sanity = sanity and (num_columns == len(table_attributes))
@@ -84,11 +78,11 @@ class MTAutoGen:
         if not sanity:
             return sanity
         idx = table_attributes.index(value_col)
-        #sanity = sanity and (table_types[idx] in ["int", "float"])
+
         units_cleaned = set([unit for unit in units if unit is not None and unit != "None"])
         sanity = sanity and (len(units_cleaned.difference(set(decimals.keys()))) == 0) #every unit of measurement must have a number of decimals defined
 
-        sanity = sanity and (not " " in value_col) and (not "," in value_col) and (not " " in id_col) and (not "," in id_col)
+        sanity = sanity and (not " " in value_col) and (not "," in value_col)
         return sanity
 
     def generate_relational_table(
@@ -144,17 +138,15 @@ class MTAutoGen:
                 result = eval(remove_markdown_syntax(extract_result(result_query, "Final answer: ")))
             except:
                 return None
-                #raise ValueError("wrong gpt generation in 'generate_relational_table'")
 
-            sanity = self.check_table_sanity(result, num_columns) #table_attributes, table_attributes_long, table_types, ranges, units, value_col, id_col, num_columns, decimals)
+            sanity = self.check_table_sanity(result, num_columns)
             if not sanity:
                 print("wrong sanity")
-                #raise ValueError("wrong sanity")
                 return None
         else:
             return None
 
-        return result # table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals
+        return result
 
     def generate_semantic_constraints(self, input, domain):
         attr = {"input": input, "domain": domain}
@@ -177,7 +169,6 @@ class MTAutoGen:
             units,
             decimals,
             value_col,
-            id_col,
             pivot_keys=None,
             shuffle=False,
             semantic_constraints=None,
@@ -192,7 +183,7 @@ class MTAutoGen:
         type_value_col = table_types[table_attributes.index(value_col)]
         pos_value_col = table_attributes.index(value_col)
         pivot_info = [list(info) for info in attr_info if info[0] in pivot_keys]
-        value_info = [list(info) for info in attr_info if info[0] == value_col and type_value_col in ["float", "int"]] #not in pivot_keys]
+        value_info = [list(info) for info in attr_info if info[0] == value_col and type_value_col in ["float", "int"]]
 
         # generate full cartesian product of pivot values
         if col_to_keep is not None and value_to_keep is not None:
@@ -207,26 +198,8 @@ class MTAutoGen:
                         break
 
         pivot_domains = [info[2] for info in pivot_info]
-        pivot_attr_names = [info[0] for info in pivot_info] # if info[0] != id_col]
+        pivot_attr_names = [info[0] for info in pivot_info]
         pivot_combinations = list(itertools.product(*pivot_domains))
-
-        """if semantic_constraints is not None and isinstance(semantic_constraints, dict):
-            combinations = []
-            for combo in pivot_combinations:
-                allowed = True
-                for values in semantic_constraints.values():
-                    for value in values:
-                        value = set(value)
-                        combo_set = set(combo)
-                        if value in combo_set:
-                            allowed = False
-                            break
-                    if not allowed:
-                        break
-                if allowed:
-                    combinations.append(combo)
-        else:
-            combinations = pivot_combinations"""
         combinations = pivot_combinations
 
         rows = []
@@ -256,39 +229,27 @@ class MTAutoGen:
                     val = self.rnd.choice(rng)
                 else:
                     raise ValueError(f"Unknown type {typ}")
-                #row.append(val)
 
                 # insert the val at the correct pos_value_col position
                 row.insert(pos_value_col, val)
 
             rows.append(row)
-            #if len(rows) > 2000: # TODO: specify better somewhere else this constraint
-            #    break
 
-        #final_columns = [info[0] for info in pivot_info + value_info]
-        #df = pd.DataFrame(rows, columns=final_columns)
         final_columns = [info[0] for info in pivot_info]
         for attr, _, _ in value_info:
             final_columns.insert(table_attributes.index(attr), attr)
 
         df = pd.DataFrame(rows, columns=final_columns)
-
-        #value_cols = [info[0] for info in value_info]
-        #df = df[[c for c in df.columns if c not in value_cols] + value_cols] # repositioning value_cols at the end
         df = df.drop_duplicates(subset=pivot_attr_names, keep="first")
 
         if semantic_constraints is not None and isinstance(semantic_constraints, dict) and "intra_row_constraints" in semantic_constraints and "inter_row_constraints" in semantic_constraints:
-            df, df_constraints = self.constrainer.get_bounds(df, semantic_constraints, value_col, id_col, ranges, random_state=self.rnd.randint(0, 10**9))
+            df, df_constraints = self.constrainer.get_bounds(df, semantic_constraints, value_col, ranges, random_state=self.rnd.randint(0, 10**9))
             for i,_ in df.iterrows():
                 if type_value_col == "float":
                     df.at[i, value_col] = round(df.at[i, value_col], decimals[units[0]])
 
         if df is not None and shuffle:
             df = df.sample(frac=1).reset_index(drop=True)
-
-        #max_num_rows = self.num_rows_range[1]
-        #if len(df) > max_num_rows:
-        #    df = df.sample(n=max_num_rows).reset_index(drop=True)
 
         return df
 
@@ -317,15 +278,11 @@ class MTAutoGen:
             column_to_vary,
             old_col_values,
             table,
-            inter_table_contradiction = False,
         ):
 
         colname = columns[column_to_vary]
 
-        if inter_table_contradiction:
-            candidates = [v for v in table[colname].unique() if v in old_col_values]
-        else:
-            candidates = [v for v in table[colname].unique() if v not in old_col_values]
+        candidates = [v for v in table[colname].unique() if v not in old_col_values]
 
         if not candidates:
             return None, None
@@ -339,13 +296,11 @@ class MTAutoGen:
             self, table: pd.DataFrame,
             table_name: str,
             value_col: str,
-            id_col: str,
             method="extractive",
             columns: list = None,
             constraint: list = None,
             column_to_vary: int = None,
             old_col_values: list = None,
-            inter_table_contradiction: bool = False,
             best_val = None,
             impose_target_for_extractive: bool = False,
             all_cols: bool = False,
@@ -385,7 +340,6 @@ class MTAutoGen:
                 if column_to_vary is not None and best_val is not None:
                     # in multi-table, we always get the numerical value
                     target = value_col
-                    #constraint[column_to_vary] = random.choice([val for val in table[columns[column_to_vary]].unique() if val not in old_col_values])
 
                     if isinstance(constraint, tuple):
                         constraint = list(constraint)
@@ -396,7 +350,7 @@ class MTAutoGen:
                     else:
                         target = self.rnd.choice(columns_aval)
 
-                constraint_txt = " AND ".join([f"{col} = \"{constr}\"" for col, constr in zip(columns, constraint)])  # TODO: add inequality constraints
+                constraint_txt = " AND ".join([f"{col} = \"{constr}\"" for col, constr in zip(columns, constraint)])
                 formats = {"target": target, "constraints": constraint_txt, "table_name": table_name}
             elif method == "comparative":
                 if len(clusters) < 2:
@@ -529,7 +483,7 @@ class MTAutoGen:
             ops = {
                 ">": operator.gt,
                 "<": operator.lt,
-                "==": operator.eq,  # or "==" if you prefer
+                "==": operator.eq,
                 ">=": operator.ge,
                 "<=": operator.le,
             }
@@ -646,13 +600,7 @@ class MTAutoGen:
 
         attr = {"nl_question": nl_question, "table": table, "sql_question": [data["query"][0], data["query"][-1]], "sql_result": label, "unit": unit} # [data["query"][0], data["query"][-1]]
 
-        #if unit is None:
         result, _ = self.gpt_model.query(prompt_verify_question if not multi else prompt_verify_question_multi_fk, attr=attr)
-        """else:
-            attr["unit"] = unit
-            if not multi:
-                raise ValueError("cannot have unit specified but no multi setting")
-            result, _ = self.gpt_model.query(prompt_verify_question_multi_unit_variation, attr=attr)"""
 
         if result is not None:
             result = remove_markdown_syntax(extract_result(result, "Final answer:"))
@@ -710,7 +658,6 @@ class MTAutoGen:
         table_htmls = []
         for i, table in enumerate(list_of_tables):
             with pd.option_context("display.float_format", lambda x: f"{x:.{number_of_decimals[i]}f}"):
-                #table_htmls = [table.to_html(index=False) for table in list_of_tables]
                 table_htmls.append(table.to_html(index=False))
 
         query_sqls = data["query"]
@@ -799,120 +746,6 @@ class MTAutoGen:
             result = remove_markdown_syntax(extract_result(result, "Final question:"))
         return result, table_htmls
 
-    def run(self, method="extractive", domain=None):
-        if method in ["extractive", "comparative", "superlative", "sum", "average", "percentage_change"]:
-            aggr = "first"
-        else:
-            raise NotImplementedError()
-
-        # generation of relational table
-        result = self.generate_relational_table(domain=domain)
-        print(result)
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
-        result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-        result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
-
-        if table_name is None:
-            return None, None
-        if sum([el == "float" for el in table_types]) > 1:
-            return None, None
-
-        constraints = self.generate_semantic_constraints(result, domain=domain)
-        if constraints is None:
-             return None, None
-        print(constraints)
-
-        self.past_table_names.append(", ".join(table_attributes))
-        self.past_table_values.append(", ".join([str(r) for r in ranges]))
-        self.past_table_names = self.past_table_names[-5:]
-        self.past_table_values = self.past_table_values[-5:]
-
-        # generate random table by filling the values randomly for num_rows rows
-        try:
-            table = self.fill_dense_relational_table(table_attributes, table_types, ranges, units, decimals, value_col, id_col, semantic_constraints=constraints)
-        except Exception as e:
-            return None, None
-
-        # run sql loading and sql generation/execution
-        data, full_mask = self.generate_label(table, table_name, value_col, id_col, method=method)
-        if data is None:
-            return None, None
-
-        print("Initial table")
-        print(table)
-        apply_null_perturbation = random.randint(0,1)
-        if apply_null_perturbation == 1: # null perturbation must be applied before column name substitution
-            attrs = {
-                "table": table,
-                "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
-                "value_col": value_col,
-            }
-            table = self.perturber.null_perturbation(**attrs)
-
-        # substituting column names with "web-table"-like ones
-        try:
-            table = self.substitute_column_names(table, table_attributes_long)
-            value_col = table_attributes_long[table_attributes.index(value_col)]
-            id_col = table_attributes_long[table_attributes.index(id_col)]
-        except Exception as e:
-            return None, None
-
-        print("After column name substitution")
-        print(table)
-        print("perturb")
-        # perform perturbations
-        for perturbation in self.perturber.pre_hct_perturbations:
-            perturbation_mask = random.randint(0,1)
-            if perturbation_mask == 0:
-                continue
-
-            attrs = {
-                "table": table,
-                "value_col": value_col
-            }
-
-            table, value_col = perturbation(**attrs)
-
-        unit_in_cell = random.randint(0, 1)
-        print("Post pre perturbations")
-        print(table)
-        print(f"Value col: {value_col}, id_col: {id_col}")
-        table, value_col = self.perturber.insert_unit_of_measurement(table, value_col, units, unit_in_cell=unit_in_cell)
-        table_hct = self.perturber.multiheader_perturbation(table, value_col, id_col, table_types, aggr=aggr, unit_in_cell=unit_in_cell, full_mask=full_mask)
-        if table_hct is None:
-            return None, None
-
-        for perturbation in self.perturber.post_hct_perturbations:
-            perturbation_mask = random.randint(0,1)
-            if perturbation_mask == 0:
-                continue
-
-            attrs = {
-                "table": table_hct
-            }
-
-            table_hct = perturbation(**attrs)
-
-        data["nl_question"] = self.generate_question(table_hct, data, decimals[units[0]], method=method)
-        if data["nl_question"] is None:
-            return None, None
-
-        with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
-            data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"], table.to_html(index=False), data["label"])
-
-        if data["nl_question"] is None:
-            return None, None
-
-        print("Initial table")
-        print(table.head())
-        print("Label generated")
-        print(data)
-        print(table_hct)
-
-        data["decimals"] = decimals[units[0]]
-
-        return table_hct, data
-
     def get_table_view(
             self,
             attributes: list,
@@ -920,53 +753,50 @@ class MTAutoGen:
             attributes_types: list,
             ranges: list,
             value_col: str,
-            id_col: str,
             columns: list = None,
-            columns_considered_to_add: list = []
     ):
         """
-        returns a random selection of attributes from a table, while keeping value_col and id_col columns
+        returns a random selection of attributes from a table, while keeping value_col
         """
 
         value_idx = attributes.index(value_col)
-        indices = [value_idx, attributes.index(id_col)]
+        indices = [value_idx]
         if columns is not None:
             indices.extend([attributes.index(col) for col in columns])
         indices = list(set(indices))
 
-        #mean_num_attrs = len(attributes) // num_tables
-        #mean_num_attrs = 6
         if columns is None:
-            num_columns_to_add = self.rnd.randint(
-                5 - len(indices), #self.perturber.num_columns_range[0] - len(indices),
-                5 - len(indices) #self.perturber.num_columns_range[1] - len(indices)
+            num_columns_to_add = self.rnd.randint( # initially we get random columns so that tables can slightly vary more
+                5 - len(indices),
+                5 - len(indices)
             )
             possible_columns_to_add = [i for i in range(len(attributes)) if i not in indices]
         else:
             num_columns_to_add = self.rnd.randint(1, 2)
-            #possible_columns_to_add = [i for i in range(len(attributes)) if i not in indices and attributes[i] in columns_considered_to_add]
-            possible_columns_to_add = [] # TODO: finalize additional feature adding
+            possible_columns_to_add = []
 
         if len(possible_columns_to_add) != 0:
-            columns_to_add = self.rnd.sample(possible_columns_to_add, min(len(possible_columns_to_add), num_columns_to_add))
-            indices.extend(columns_to_add) #random.sample([i for i in range(len(attributes)) if i not in indices], num_attrs-len(indices)))
+            columns_to_add = self.rnd.sample(possible_columns_to_add,
+                                             min(len(possible_columns_to_add), num_columns_to_add))
+            indices.extend(
+                columns_to_add)  # random.sample([i for i in range(len(attributes)) if i not in indices], num_attrs-len(indices)))
             indices = sorted(list(set(indices)))
         else:
             columns_to_add = []
 
         indices = [i for i in indices if i != value_idx] + [value_idx]
         ranges_tmp = deepcopy(ranges)
-        if columns is not None:
-            for i in columns_to_add: # we reduce the amount of labels for the added columns to reduce computational complexity
-                ranges_tmp[i] = self.rnd.sample(ranges_tmp[i], min(len(ranges_tmp[i]), self.rnd.randint(2,3)))
+        """if columns is not None:
+            for i in columns_to_add:  # we reduce the amount of labels for the added columns to reduce computational complexity, while varying more the generated tables
+                ranges_tmp[i] = self.rnd.sample(ranges_tmp[i], min(len(ranges_tmp[i]), self.rnd.randint(2, 3)))"""
 
         get_view = lambda x: [x[i] for i in indices]
         attributes_view, attributes_long_view, attributes_types_view, range_view = (get_view(attributes),
-                                                                                   get_view(attributes_long),
-                                                                                   get_view(attributes_types),
-                                                                                   get_view(ranges_tmp))
+                                                                                    get_view(attributes_long),
+                                                                                    get_view(attributes_types),
+                                                                                    get_view(ranges_tmp))
 
-        return attributes_view, attributes_long_view, attributes_types_view, range_view #, [attributes[col] for col in columns_to_add]
+        return attributes_view, attributes_long_view, attributes_types_view, range_view  # , [attributes[col] for col in columns_to_add]
 
     def get_table_view_fk(
             self,
@@ -980,7 +810,7 @@ class MTAutoGen:
             is_final: bool = False,
     ):
         """
-        returns a random selection of attributes from a table, while keeping value_col and id_col columns
+        returns a random selection of attributes from a table, while keeping value_col
         """
 
         if is_final:
@@ -993,25 +823,20 @@ class MTAutoGen:
 
         indices = list(set(indices))
 
-        #mean_num_attrs = len(attributes) // num_tables
-        #mean_num_attrs = 6
         num_columns_to_add = self.rnd.randint(
-            5 - len(indices), #self.perturber.num_columns_range[0] - len(indices),
-            5 - len(indices) #self.perturber.num_columns_range[1] - len(indices)
+            5 - len(indices),
+            5 - len(indices)
         )
         possible_columns_to_add = [i for i in range(len(attributes)) if attributes[i] not in cols_to_avoid+[col_to_keep, value_col] and attributes_types[i] != "float"]
 
         if len(possible_columns_to_add) != 0:
             columns_to_add = self.rnd.sample(possible_columns_to_add, min(len(possible_columns_to_add), num_columns_to_add))
-            indices.extend(columns_to_add) #random.sample([i for i in range(len(attributes)) if i not in indices], num_attrs-len(indices)))
+            indices.extend(columns_to_add)
             indices = sorted(list(set(indices)))
         else:
             columns_to_add = []
 
         ranges_tmp = deepcopy(ranges)
-        #if columns is not None:
-        #    for i in columns_to_add: # we reduce the amount of labels for the added columns to reduce computational complexity
-        #        ranges_tmp[i] = random.sample(ranges_tmp[i], min(len(ranges_tmp[i]), random.randint(2,3)))
 
         get_view = lambda x: [x[i] for i in indices]
         attributes_view, attributes_long_view, attributes_types_view, range_view = (get_view(attributes),
@@ -1021,392 +846,143 @@ class MTAutoGen:
 
         return attributes_view, attributes_long_view, attributes_types_view, range_view #, [attributes[col] for col in columns_to_add]
 
-
-    def run_multitable(
+    def run_one_table(
             self,
-            method="comparative",
-            num_tables=2,
             domain=None,
-            inter_table_contradiction=False,
-            normalization_ambiguity=False,
-            apply_unit_conversions=True
-    ):
-        if num_tables <= 1:
-            return self.run(method=method, domain=domain)
-
-        if method in ["extractive", "comparative", "superlative", "sum", "average", "percentage_change"]:
-            aggr = "first"
-        else:
-            raise NotImplementedError()
-
-        if method == "extractive":
-            return None, None
-
-        # generation of relational table
-        result = self.generate_relational_table(domain=domain, num_columns=self.perturber.num_columns_range[1], col_cardinality=10)
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
-            result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-                result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
-
-        print(result)
-        if table_name is None:
-            return None, None
-        if sum([el == "float" for el in table_types]) > 1:
-            return None, None
-
-        constraints = self.generate_semantic_constraints(result, domain=domain)
-        if constraints is None:
-            return None, None
-
-        print(constraints)
-        #self.past_table_names.append(table_name)
-        self.past_table_names.append(", ".join(table_attributes))
-        self.past_table_values.append(", ".join([str(r) for r in ranges]))
-        self.past_table_names = self.past_table_names[-5:]
-        self.past_table_values = self.past_table_values[-5:]
-
-        unit_normalization_mask = [0] * num_tables
-        if normalization_ambiguity:
-            unit_normalization_mask[random.randint(0,len(unit_normalization_mask)-1)] = 1
-
-        # generate random table by filling the values randomly for num_rows rows
-        list_of_data = []
-        list_of_table_hct = []
-        columns, constraint_cols, column_to_vary, old_col_values = None, None, None, []
-        for i in range(num_tables):
-            table_attributes_view, table_attributes_long_view, table_types_view, range_view = self.get_table_view(
-                table_attributes,
-                table_attributes_long,
-                table_types,
-                ranges,
-                value_col,
-                id_col,
-                columns=columns,
-            )
-            #try:
-            table = self.fill_dense_relational_table(table_attributes_view, table_types_view, range_view, units, decimals, value_col, id_col, semantic_constraints=constraints)
-            #except Exception as e:
-            #    return None, None
-
-            # run sql loading and sql generation/execution
-            # we force the method to be extractive, as the true method will be applied across tables later
-            data, full_mask = self.generate_label(
-                table,
-                table_name,
-                value_col,
-                id_col,
-                method="extractive",
-                columns=columns,
-                constraint=constraint_cols,
-                column_to_vary=column_to_vary,
-                old_col_values=old_col_values,
-                inter_table_contradiction=inter_table_contradiction,
-            )
-
-            if data is None:
-                return None, None
-
-            if columns is None and constraint_cols is None:
-                columns = data["columns"]
-                constraint_cols = data["constraint"]
-
-                # I make sure that inter row constraints are kept even when dealing with multiple tables
-                # for that, in different tables, I vary an attribute that is not part of the inter-row constraints (if any)
-                columns_to_consider = [col for col in columns if col not in str(constraints["inter_row_constraints"])]
-                # the column to vary must not be the value_col
-                columns_to_consider = [col for col in columns_to_consider if col != value_col]
-                # the column to vary must have at least num_tables different values, to ensure that we can vary it across tables
-                columns_to_consider = [col for col in columns_to_consider if table[col].nunique() >= num_tables]
-                if len(columns_to_consider) == 0:
-                    return None, None
-
-                max_val, best_col = -1, None
-                for col in columns_to_consider:
-                    pos = columns.index(col)
-                    num_samples = len(table[table[columns[pos]] == data["constraint"][pos]])
-                    if num_samples > max_val:
-                        max_val = num_samples
-                        best_col = col
-
-                column_to_vary = columns.index(best_col)
-                #column_to_vary = columns.index(random.choice(columns_to_consider))
-                """best_col = max(
-                    columns_to_consider,
-                    key=lambda c: (table[c].nunique(), -columns.index(c))
-                )
-                column_to_vary = columns.index(best_col)"""
-
-            old_col_values.append(data["constraint"][column_to_vary])
-
-            table = table[table[columns[column_to_vary]] == data["constraint"][column_to_vary]]
-
-            print(f"Table {i+1} before perturbation")
-            print(table)
-            apply_null_perturbation = random.randint(0, 1)
-            if apply_null_perturbation == 1:  # null perturbation must be applied before column name substitution
-                attrs = {
-                    "table": table,
-                    "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
-                    "value_col": value_col,
-                }
-                table = self.perturber.null_perturbation(**attrs)
-
-            # substituting column names with "web-table"-like ones
-            try:
-                table = self.substitute_column_names(table, table_attributes_long_view)
-                new_value_col = table_attributes_long_view[table_attributes_view.index(value_col)]
-                new_id_col = table_attributes_long_view[table_attributes_view.index(id_col)]
-            except Exception as e:
-                return None, None
-
-            # perform perturbations
-            for perturbation in self.perturber.pre_hct_perturbations:
-                perturbation_mask = random.randint(0, 1)
-                if perturbation_mask == 0:
-                    continue
-
-                attrs = {
-                    "table": table,
-                    "value_col": new_value_col
-                }
-
-                table, new_value_col = perturbation(**attrs)
-
-            if i != 0 and apply_unit_conversions:
-                new_unit, conversion_factor = self.unit_converter.random_convertible_unit(units[0])
-                if new_unit is not None:
-                    units = [new_unit]
-                    table[new_value_col] = table[new_value_col].apply(lambda x: conversion_factor(x) if pd.notnull(x) else x)
-
-            unit_in_cell = random.randint(0, 1)
-            if unit_normalization_mask[i] == 0:
-                table, new_value_col = self.perturber.insert_unit_of_measurement(table, new_value_col, units, unit_in_cell=unit_in_cell)
-            else:
-                # unit of measurement not inserted for normalization ambiguity
-                new_value_col = value_col
-
-            table_hct = self.perturber.multiheader_perturbation(table, new_value_col, new_id_col, table_types_view, aggr=aggr, unit_in_cell=unit_in_cell, full_mask=full_mask)
-            if table_hct is None:
-                return None, None
-
-            for perturbation in self.perturber.post_hct_perturbations:
-                perturbation_mask = random.randint(0, 1)
-                if perturbation_mask == 0:
-                    continue
-
-                attrs = {
-                    "table": table_hct
-                }
-
-                table_hct = perturbation(**attrs)
-
-            print(f"Table {i+1} after perturbation")
-            print(table_hct)
-            list_of_table_hct.append(table_hct)
-            list_of_data.append(data)
-
-        data = self.generate_label_multitable(list_of_data, method=method)
-        if data is None:
-            return None, None
-
-        data["nl_question"] = self.generate_question_multitable(list_of_table_hct, data, decimals[units[0]])
-        if data["nl_question"] is None:
-            return None, None
-
-        with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
-            data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"], [t.to_html(index=False) for t in list_of_table_hct], data["label"])
-        if data["nl_question"] is None:
-            return None, None
-
-        print("Label generated")
-        print(data)
-        for t in list_of_table_hct:
-            print(t.head())
-
-        data["decimals"] = decimals[units[0]]
-        return list_of_table_hct, data
-
-    def run_loop(self, method="extractive", num_tables=1, num_samples=1, domain=None, sequential=False):
-        samples = []
-        for _ in tqdm(range(num_samples), desc="Generating samples..."):
-            if num_tables == 1:
-                table, data = self.run(method=method, domain=domain)
-            elif num_tables > 1:
-                if sequential:
-                    raise NotImplementedError
-                table, data = self.run_multitable(method=method, num_tables=num_tables, domain=domain)
-            else:
-                raise ValueError("num_tables must be >= 1")
-
-            if table is None or data is None:
-                continue
-
-            with pd.option_context("display.float_format", lambda x: f"{x:.{data['decimals']}f}"):
-                samples.append([data["nl_question"], data["query"], method, table.to_html(index=True), data["label"]])
-
-        return pd.DataFrame(samples, columns=["Question", "SQL Query", "Method", "Table", "Label"])
-
-    def run_one_table_ablations(
-            self,
-            domain=None
+            col_cardinality=10,
+            method=None,
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
         and for multiple perturbation types (to reduce API costs)
         """
-        #if method in ["extractive", "comparative", "superlative", "sum", "average", "percentage_change"]:
         aggr = "first"
+        sampled_canonical_units = get_n_canonical_units(domain, n=1)
 
-        # generation of relational table
-        result = self.generate_relational_table(domain=domain)
+        # GENERATION SCHEMA
+        result = self.generate_relational_table(
+            domain=domain,
+            num_columns=6,
+            col_cardinality=col_cardinality,
+            canonical_units=sampled_canonical_units,
+        )
+
         if result is None:
             return None, None, "table generation error (result is None)"
 
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
+        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, units, decimals = \
             result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-                result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
+                result["value_col"], result["unit_of_measurement"], result["number_of_decimals"]
 
         if table_name is None:
             return None, None, "table generation error (table is None)"
         if sum([el == "float" for el in table_types]) > 1:
             return None, None, "table generation error (too many floats)"
+        if is_unit_in_domain(units[0], domain) is None:
+            return None, None, "wrong unit generated"
 
+        # GENERATION OF SEMANTIC CONSTRAINTS
         constraints = self.generate_semantic_constraints(result, domain=domain)
         if constraints is None:
             return None, None, "semantic constraints generation error"
 
+        initial_offset = random.randint(0, 10000) # used to guarantee that different runs use different random perturbations
         self.past_table_names.append(", ".join(table_attributes))
         self.past_table_values.append(", ".join([str(r) for r in ranges]))
         self.past_table_names = self.past_table_names[-5:]
         self.past_table_values = self.past_table_values[-5:]
 
-        # generate random table by filling the values randomly for num_rows rows
-        #try:
-        table = self.fill_dense_relational_table(table_attributes, table_types, ranges, units, decimals, value_col,
-                                                     id_col, semantic_constraints=constraints)
-        #except Exception as e:
-        #    return None, None, "table generation error (filling table)"
-
         datasets = {}
-        perturbations_to_apply = [self.perturber.null_perturbation] + \
-                                 self.perturber.pre_hct_perturbations + \
-                                 self.perturber.post_hct_perturbations + \
-                                 self.intra_ambiguous_perturber.perturbations
 
-        for method in SQL_TEMPLATES:
+        if method is not None:
+            methods = [method]
+        else:
+            methods = SQL_TEMPLATES
+
+        for method in methods:
+            for idx in range(len(range_view)):
+                if table_types_view[idx] not in ["float", "int"]:
+                    range_view[idx] = range_view[idx][:6]  # we reduce the combinations of values to avoid too much overhead
+
+            # LATENT RELATIONAL SOURCE GENERATION
+            try:
+                view_constraints = {"inter_row_constraints": [], "intra_row_constraints": []}
+                for constraint_type in constraints:
+                    for rule in constraints[constraint_type]:
+                        ok = True
+                        if constraint_type == "inter_row_constraints":
+                            conditions = [m.group("cond") for m in
+                                          re.compile(self.constrainer.ATOM_EXTRACT, re.VERBOSE | re.DOTALL).finditer(
+                                              rule)]
+                        else:
+                            m = self.constrainer.PATTERN_intra.match(rule)
+                            if not m:
+                                raise ValueError(f"Invalid intra rule: {rule!r}")
+                            conditions = [m.group("condition").strip()]
+                            expr = [m.group("expr").strip()]
+                            conditions.extend(expr)
+
+                        for cond in conditions:
+                            cond = cond.strip()
+                            if cond[0] in ["(", ")"]:
+                                cond = cond[1:]
+                            if cond[-1] in ["(", ")"]:
+                                cond = cond[:-1]
+                            columns_from_rule = extract_columns(parse_expr(cond))
+                            for col in columns_from_rule:
+                                if col not in table_attributes_view:
+                                    ok = False
+                                    break
+                            if not ok:
+                                break
+
+                        if ok:
+                            view_constraints[constraint_type].append(rule)
+
+                table = self.fill_dense_relational_table(table_attributes_view, table_types_view, range_view, units,
+                                                         decimals, value_col,
+                                                         semantic_constraints=view_constraints)
+
+            except Exception as e:
+                continue
+
             # run sql loading and sql generation/execution
-            data, full_mask = self.generate_label(table, table_name, value_col, id_col, method=method)
+            try:
+                data, full_mask = self.generate_label(
+                    table,
+                    table_name,
+                    value_col,
+                    method=method,
+                )
+            except Exception as e:
+                continue
+
             if data is None:
                 continue
 
-            datasets[method] = {}
-
-            for num_perturbation, perturbation in enumerate(perturbations_to_apply):
-                new_table = table.copy()
-                new_full_mask = full_mask
-                new_table_types = deepcopy(table_types)
-                if num_perturbation == 0: # null perturbation
-                    attrs = {
-                        "table": new_table,
-                        "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
-                        "value_col": value_col,
-                    }
-                    new_table = self.perturber.null_perturbation(**attrs)
-
-                # substituting column names with "web-table"-like ones
-                try:
-                    new_table = self.substitute_column_names(new_table, table_attributes_long)
-                    new_value_col = table_attributes_long[table_attributes.index(value_col)]
-                    new_id_col = table_attributes_long[table_attributes.index(id_col)]
-                except Exception as e:
-                    return None, None, "column name substitution error"
-
-                if num_perturbation != 0 and perturbation in self.perturber.pre_hct_perturbations:
-                    attrs = {
-                        "table": new_table,
-                        "value_col": new_value_col
-                    }
-
-                    new_table, new_value_col = perturbation(**attrs)
-
-                if num_perturbation != 0 and perturbation in self.intra_ambiguous_perturber.perturbations:
-                    attrs = {
-                        "table": new_table
-                    }
-                    if perturbation == self.intra_ambiguous_perturber.entity_missing:
-                        attrs["full_mask"] = full_mask
-                        new_table, new_full_mask = perturbation(**attrs)
-                    elif perturbation == self.intra_ambiguous_perturber.intra_table_contradiction:
-                        attrs["value_col"] = new_value_col
-                        new_table = perturbation(**attrs)
-                    else:
-                        raise ValueError(f"Unknown function {perturbation} in intra_ambiguous perturbations")
-
-                try:
-                    unit_in_cell = self.rnd.randint(0, 1)
-                    new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, units, unit_in_cell=unit_in_cell)
-                    table_before_pivot = new_table.copy()
-                    table_hct, rows_chosen, cols_chosen, _ = self.perturber.multiheader_perturbation(new_table, new_value_col, new_id_col, new_table_types, aggr=aggr,
-                                                                        unit_in_cell=unit_in_cell, full_mask=new_full_mask)
-
-                except:
-                    continue
-
-                if table_hct is None:
-                    continue
-
-                table_hct = self.perturber.restore_needed_cells_after_value_merge(
-                    table_before_pivot=table_before_pivot,
-                    pivot_table=table_hct,
-                    value_col=new_value_col,
-                    full_mask=full_mask,
-                    rows_chosen=rows_chosen,
-                    cols_chosen=cols_chosen,
-                )
-
-                if num_perturbation != 0 and perturbation in self.perturber.post_hct_perturbations:
-                    attrs = {
-                        "table": table_hct,
-                        "strength": 50
-                    }
-
-                    table_hct = perturbation(**attrs)
-
-                if "nl_question" not in data: 
-                    data["nl_question"] = self.generate_question(table_hct, data, decimals[units[0]], method=method)
-                    if data["nl_question"] is None:
-                        continue
-
-                    with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
-                        data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"],
-                                                                             table_hct.to_html(index=False), data["label"])
-                    if data["nl_question"] is None:
-                        continue
-
-                datasets[method][perturbation.__name__] = (table_hct, data, constraints)
-
-            # adding a sample with all perturbations randomly applied with lower strength
             new_table = table.copy()
             new_full_mask = full_mask
             new_table_types = deepcopy(table_types)
 
-            if self.rnd.randint(0,1) == 1: # apply perturbation with 50% chance
+            self.perturber.set_random_seed(initial_offset + i)
+            if self.rnd.randint(0,1):  # apply null perturbation with 50% chance
                 attrs = {
                     "table": new_table,
-                    "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
+                    "constraints": list(zip(data["columns"], data["constraint"])),
                     "value_col": value_col,
                 }
+
                 new_table = self.perturber.null_perturbation(**attrs)
 
             try:
-                new_table = self.substitute_column_names(new_table, table_attributes_long)
+                new_table = self.substitute_column_names(new_table, table_attributes_long_view)
                 new_value_col = table_attributes_long[table_attributes.index(value_col)]
-                new_id_col = table_attributes_long[table_attributes.index(id_col)]
             except Exception as e:
-                return None, None, "column name substitution error"
+                continue
 
+            # apply pre-pivot perturbations
             for perturbation in self.perturber.pre_hct_perturbations:
-                if self.rnd.randint(0,1) == 1:
+                if self.rnd.randint(0,1):
                     attrs = {
                         "table": new_table,
                         "value_col": new_value_col
@@ -1415,14 +991,18 @@ class MTAutoGen:
                     new_table, new_value_col = perturbation(**attrs)
 
             try:
-                unit_in_cell = self.rnd.randint(0, 1)
-                new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, units,
+                # unit change
+                new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col,
+                                                                                     new_units,
                                                                                      unit_in_cell=unit_in_cell)
                 table_before_pivot = new_table.copy()
-                table_hct, rows_chosen, cols_chosen, _ = self.perturber.multiheader_perturbation(new_table, new_value_col, new_id_col, new_table_types,
-                                                                    aggr=aggr,
-                                                                    unit_in_cell=unit_in_cell, full_mask=new_full_mask)
-            except:
+                # pivot
+                table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table,
+                                                                                                      new_value_col,
+                                                                                                      aggr=aggr,
+                                                                                                      unit_in_cell=unit_in_cell,
+                                                                                                      full_mask=new_full_mask)
+            except Exception as e:
                 continue
 
             if table_hct is None:
@@ -1437,38 +1017,52 @@ class MTAutoGen:
                 cols_chosen=cols_chosen,
             )
 
+            # apply post pivot perturbations
             for perturbation in self.perturber.post_hct_perturbations:
-                if self.rnd.randint(0,1) == 1:
+                if self.rnd.randint(0,1):
                     attrs = {
                         "table": table_hct
                     }
 
                     table_hct = perturbation(**attrs)
 
-            datasets[method]["all_perturbations"] = (table_hct, data, constraints)
+            if "nl_question" not in data:
+                data["nl_question"] = self.generate_question(table_hct, data, decimals[units[0]], method=method)
+                if data["nl_question"] is None:
+                    continue
+
+                with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
+                    data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"],
+                                                                         table_hct.to_html(index=False),
+                                                                         data["label"])
+                if data["nl_question"] is None:
+                    continue
+
+            datasets[method] = (table_hct, data, constraints)
 
         return datasets, decimals[units[0]], None
 
 
-    def run_multi_table_ablations(
+
+
+
+    def run_one_table_ablations(
             self,
             domain=None,
-            num_tables=2,
-            inter_table_contradiction=False,
+            method=None,
             col_cardinality=10,
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
         and for multiple perturbation types (to reduce API costs)
         """
-        #if method in ["extractive", "comparative", "superlative", "sum", "average", "percentage_change"]:
         aggr = "first"
-        sampled_canonical_units = get_n_canonical_units(domain, n=20)
+        sampled_canonical_units = get_n_canonical_units(domain, n=1)
 
-        # generation of relational table
+        # GENERATION SCHEMA
         result = self.generate_relational_table(
             domain=domain,
-            num_columns=6, #self.perturber.num_columns_range[1],
+            num_columns=6,
             col_cardinality=col_cardinality,
             canonical_units=sampled_canonical_units,
         )
@@ -1476,9 +1070,9 @@ class MTAutoGen:
         if result is None:
             return None, None, "table generation error (result is None)"
 
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
+        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, units, decimals = \
             result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-                result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
+                result["value_col"], result["unit_of_measurement"], result["number_of_decimals"]
 
         if table_name is None:
             return None, None, "table generation error (table is None)"
@@ -1487,397 +1081,161 @@ class MTAutoGen:
         if is_unit_in_domain(units[0], domain) is None:
             return None, None, "wrong unit generated"
 
+        # GENERATION OF SEMANTIC CONSTRAINTS
         constraints = self.generate_semantic_constraints(result, domain=domain)
         if constraints is None:
             return None, None, "semantic constraints generation error"
 
-        columns_considered_to_add = [col for col in table_attributes if col not in str(constraints["inter_row_constraints"]) and col not in str(constraints["intra_row_constraints"])]
-
+        initial_offset = random.randint(0, 10000) # used to guarantee that different runs use different random perturbations
         self.past_table_names.append(", ".join(table_attributes))
         self.past_table_values.append(", ".join([str(r) for r in ranges]))
         self.past_table_names = self.past_table_names[-5:]
         self.past_table_values = self.past_table_values[-5:]
 
-        list_of_data = []
-        list_of_table_hct = []
-        #columns, constraint_cols, column_to_vary, old_col_values = None, None, None, []
         datasets = {}
-        tables_unit_converted, tables_not_unit_converted = {}, {}
-        data_unit_converted, data_not_unit_converted = {}, {}
-        new_decimals = decimals
-        new_units = units
-        view_constraints_tot_unit, view_constraints_tot_not_unit = {}, {}
-        initial_offset = random.randint(0, 10000) # used to guarantee that different runs use different random perturbations
+        perturbations_to_apply = [self.perturber.null_perturbation] + \
+                                 self.perturber.pre_hct_perturbations + \
+                                 self.perturber.post_hct_perturbations
 
-        for it, num_tables in enumerate([2, 3, 5, 10, 20]):
-            tables_unit_converted[str(num_tables)] = []
-            tables_not_unit_converted[str(num_tables)] = []
-            data_unit_converted[str(num_tables)] = []
-            data_not_unit_converted[str(num_tables)] = []
-            view_constraints_tot_unit[str(num_tables)] = []
-            view_constraints_tot_not_unit[str(num_tables)] = []
-            datasets[str(num_tables)] = {}
+        if method is not None:
+            method_list = [method]
+        else:
+            method_list = SQL_TEMPLATES
 
-        columns, constraint_cols, column_to_vary, old_col_values = None, None, None, []
-        good = True
-        for it, num_tables in enumerate([2, 3, 5, 10, 20]):
-            print(f"Generating for {num_tables} tables...")
-            #columns, constraint_cols, column_to_vary, old_col_values = None, None, None, []
+        for method in method_list:
+            for idx in range(len(range_view)):
+                if table_types_view[idx] not in ["float", "int"]:
+                    range_view[idx] = range_view[idx][:6] # we reduce the combinations of values to avoid too much overhead
 
-            if it == 0:
-                previous_num_tables = 0
-            else:
-                previous_num_tables = [2,3,5,10,20][it-1]
+            # LATENT RELATIONAL SOURCE GENERATION
+            try:
+                view_constraints = {"inter_row_constraints": [], "intra_row_constraints": []}
+                for constraint_type in constraints:
+                    for rule in constraints[constraint_type]:
+                        ok = True
+                        if constraint_type == "inter_row_constraints":
+                            conditions = [m.group("cond") for m in re.compile(self.constrainer.ATOM_EXTRACT, re.VERBOSE | re.DOTALL).finditer(rule)]
+                        else:
+                            m = self.constrainer.PATTERN_intra.match(rule)
+                            if not m:
+                                raise ValueError(f"Invalid intra rule: {rule!r}")
+                            conditions = [m.group("condition").strip()]
+                            expr = [m.group("expr").strip()]
+                            conditions.extend(expr)
 
-            for i in range(previous_num_tables, num_tables):
-                self.set_random_seed(initial_offset+i)
-                table_attributes_view, table_attributes_long_view, table_types_view, range_view = self.get_table_view(
-                    table_attributes,
-                    table_attributes_long,
-                    table_types,
-                    ranges,
+                        for cond in conditions:
+                            cond = cond.strip()
+                            if cond[0] in ["(", ")"]:
+                                cond = cond[1:]
+                            if cond[-1] in ["(", ")"]:
+                                cond = cond[:-1]
+                            columns_from_rule = extract_columns(parse_expr(cond))
+                            for col in columns_from_rule:
+                                if col not in table_attributes_view:
+                                    ok = False
+                                    break
+                            if not ok:
+                                break
+
+                        if ok:
+                            view_constraints[constraint_type].append(rule)
+
+                table = self.fill_dense_relational_table(table_attributes_view, table_types_view, range_view, units, decimals, value_col,
+                                                             semantic_constraints=view_constraints)
+
+            except Exception as e:
+                continue
+
+            # run sql loading and sql generation/execution
+            try:
+                data, full_mask = self.generate_label(
+                    table,
+                    table_name,
                     value_col,
-                    id_col,
-                    columns=columns,
-                    columns_considered_to_add=columns_considered_to_add
+                    method=method,
+                )
+            except Exception as e:
+                continue
+
+            if data is None:
+                continue
+
+            for i, perturbation in enumerate(perturbations_to_apply):
+                new_table = table.copy()
+                new_full_mask = full_mask
+                new_table_types = deepcopy(table_types)
+
+                self.perturber.set_random_seed(initial_offset+i)
+                if perturbation == "null_perturbation": # apply null perturbation with 50% chance
+                    attrs = {
+                        "table": new_table,
+                        "constraints": list(zip(data["columns"], data["constraint"])),
+                        "value_col": value_col,
+                    }
+
+                    new_table = self.perturber.null_perturbation(**attrs)
+
+                try:
+                    new_table = self.substitute_column_names(new_table, table_attributes_long_view)
+                    new_value_col = table_attributes_long[table_attributes.index(value_col)]
+                except Exception as e:
+                    continue
+
+                # apply pre-pivot perturbations
+                if perturbation in self.perturber.pre_hct_perturbations:
+                    attrs = {
+                        "table": new_table,
+                        "value_col": new_value_col
+                    }
+
+                    new_table, new_value_col = perturbation(**attrs)
+
+                try:
+                    # unit change
+                    new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
+                                                                                         unit_in_cell=unit_in_cell)
+                    table_before_pivot = new_table.copy()
+                    # pivot
+                    table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                        aggr=aggr,
+                                                                        unit_in_cell=unit_in_cell, full_mask=new_full_mask)
+                except Exception as e:
+                    continue
+
+                if table_hct is None:
+                    continue
+
+                table_hct = self.perturber.restore_needed_cells_after_value_merge(
+                    table_before_pivot=table_before_pivot,
+                    pivot_table=table_hct,
+                    value_col=new_value_col,
+                    full_mask=full_mask,
+                    rows_chosen=rows_chosen,
+                    cols_chosen=cols_chosen,
                 )
 
-                if column_to_vary is None:
-                    column_to_vary = self.rnd.choice([idx for idx in range(len(table_attributes_view)) if table_types_view[idx] not in ["float", "int"]])
+                # apply post pivot perturbations
+                if perturbation in self.perturber.post_hct_perturbations:
+                    attrs = {
+                        "table": table_hct
+                    }
 
-                for idx in range(len(range_view)):
-                    if idx != column_to_vary and table_types_view[idx] not in ["float", "int"]:
-                        range_view[idx] = range_view[idx][:6] # we reduce the combinations of values to avoid too much overhead
+                    table_hct = perturbation(**attrs)
 
-
-                # generate random table by filling the values randomly for num_rows rows
-                try:
-                    view_constraints = {"inter_row_constraints": [], "intra_row_constraints": []}
-                    for constraint_type in constraints:
-                        for rule in constraints[constraint_type]:
-                            ok = True
-                            if constraint_type == "inter_row_constraints":
-                                conditions = [m.group("cond") for m in re.compile(self.constrainer.ATOM_EXTRACT, re.VERBOSE | re.DOTALL).finditer(rule)]
-                            else:
-                                #conditions = [rule]
-                                m = self.constrainer.PATTERN_intra.match(rule)
-                                if not m:
-                                    raise ValueError(f"Invalid intra rule: {rule!r}")
-                                conditions = [m.group("condition").strip()]
-                                expr = [m.group("expr").strip()]
-                                conditions.extend(expr)
-
-                            for cond in conditions:
-                                cond = cond.strip()
-                                if cond[0] in ["(", ")"]:
-                                    cond = cond[1:]
-                                if cond[-1] in ["(", ")"]:
-                                    cond = cond[:-1]
-                                columns_from_rule = extract_columns(parse_expr(cond))
-                                for col in columns_from_rule:
-                                    if col not in table_attributes_view:
-                                        ok = False
-                                        break
-                                if not ok:
-                                    break
-
-                            if ok:
-                                view_constraints[constraint_type].append(rule)
-
-                    table = self.fill_dense_relational_table(table_attributes_view, table_types_view, range_view, units, decimals, value_col,
-                                                                 id_col, semantic_constraints=view_constraints)
-
-                    best_val = None
-                    if i != 0:
-                        best_val = self.choose_constraint_on_new_table(
-                            columns,
-                            column_to_vary,
-                            old_col_values,
-                            table,
-                            inter_table_contradiction
-                        )
-
-                        if isinstance(constraint_cols, tuple):
-                            constraint_cols = list(constraint_cols)
-
-                        constraint_cols[column_to_vary] = best_val
-
-                        # rows where the selected columns match the given values
-                        mask = (table[columns] == constraint_cols).all(axis=1)
-
-                        # keep all non-matching rows, and deduplicate matching rows
-                        table = pd.concat([
-                            table[~mask],
-                            table[mask].drop_duplicates(subset=columns, keep="first")
-                        ], ignore_index=True)
-
-                except Exception as e:
-                    good = False
-                    break
-                    #return None, None, "table generation error (filling table)"
-
-                # run sql loading and sql generation/execution
-                #data, full_mask = self.generate_label(table, table_name, value_col, id_col, method=method)
-                try:
-                    data, full_mask = self.generate_label(
-                        table,
-                        table_name,
-                        value_col,
-                        id_col,
-                        method="extractive", # we force the method to be extractive, as the true method will be applied across tables later
-                        columns=columns,
-                        constraint=constraint_cols,
-                        column_to_vary=column_to_vary,
-                        old_col_values=old_col_values,
-                        inter_table_contradiction=inter_table_contradiction,
-                        best_val=best_val,
-                        all_cols=True,
-                        impose_target_for_extractive=True
-                    )
-                except Exception as e:
-                    good = False
-                    break
-
-                if data is None:
-                    good = False
-                    break
-                    #return None, None, f"error in data generation for the {i+1}-th table"
-
-                if columns is None and constraint_cols is None:
-                    columns = data["columns"]
-                    constraint_cols = data["constraint"]
-
-                    if column_to_vary is None:
-                        # I make sure that inter row constraints are kept even when dealing with multiple tables
-                        # for that, in different tables, I vary an attribute that is not part of the inter-row constraints (if any)
-                        columns_to_consider = [col for col in columns if
-                                               col not in str(view_constraints["inter_row_constraints"])]
-                        # the column to vary must not be the value_col
-                        columns_to_consider = [col for col in columns_to_consider if col != value_col]
-                        # the column to vary must have at least num_tables different values, to ensure that we can vary it across tables
-                        columns_to_consider = [col for col in columns_to_consider if table[col].nunique() >= num_tables]
-                        if len(columns_to_consider) == 0:
-                            good = False
-                            break
-                            #return None, None, "column to differ between tables error"
-
-                        max_val, best_col = -1, None
-                        for col in columns_to_consider:
-                            pos = columns.index(col)
-                            num_samples = len(table[table[columns[pos]] == data["constraint"][pos]])
-                            if num_samples > max_val:
-                                max_val = num_samples
-                                best_col = col
-
-                        column_to_vary = columns.index(best_col)
-
-                old_col_values.append(data["constraint"][column_to_vary])
-
-                table = table[table[columns[column_to_vary]] == data["constraint"][column_to_vary]]
-
-                rnd_apply_nan = self.rnd.randint(0,1)
-                unit_in_cell = self.rnd.randint(0, 1)
-                rnd_apply_pre = []
-                for _ in self.perturber.pre_hct_perturbations:
-                    rnd_apply_pre.append(self.rnd.randint(0,1))
-
-                rnd_apply_post = []
-                for _ in self.perturber.post_hct_perturbations:
-                    rnd_apply_post.append(self.rnd.randint(0,1))
-
-                # adding a sample with all perturbations randomly applied with lower strength
-                for apply_unit_conversions in [True, False]:
-                    new_table = table.copy()
-                    new_full_mask = full_mask
-                    new_table_types = deepcopy(table_types)
-
-                    self.perturber.set_random_seed(initial_offset+i)
-                    if rnd_apply_nan == 1: # apply perturbation with 50% chance
-                        attrs = {
-                            "table": new_table,
-                            "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
-                            "value_col": value_col,
-                        }
-
-                        new_table = self.perturber.null_perturbation(**attrs)
-
-                    try:
-                        new_table = self.substitute_column_names(new_table, table_attributes_long_view)
-                        new_value_col = table_attributes_long[table_attributes.index(value_col)]
-                        new_id_col = table_attributes_long[table_attributes.index(id_col)]
-                    except Exception as e:
-                        #return None, None, "column name substitution error"
-                        good = False
-                        break
-
-                    try:
-                        new_units = units
-                        new_decimals = decimals
-                        if i != 0 and apply_unit_conversions:
-                            needed_decimals = -1
-                            for j in range(5):
-                                surrogate_unit, target_unit = get_random_unit(units[0], domain, seed=initial_offset+i+j)
-                                highest_needed_decimals = -1
-                                for k,row in new_table.iterrows():
-                                    try:
-                                        value_converted, needed_decimals = get_value(
-                                            surrogate_unit,
-                                            target_unit,
-                                            domain,
-                                            row[new_value_col],
-                                            self.perturber.nan_fill_str
-                                        )
-                                    except:
-                                        break
-                                        #return None, None, "error: chosen unit whose factor_to_canonical is zero"
-
-                                    if needed_decimals is not None:
-                                        if needed_decimals == -1:
-                                            break
-                                            # return None, None, "couldn't find rounding with the specified number of decimal values"
-
-                                        #new_table.at[k, new_value_col] = round(value_converted, needed_decimals)
-                                        new_table.at[k, new_value_col] = value_converted
-                                        if needed_decimals > highest_needed_decimals:
-                                            highest_needed_decimals = needed_decimals
-
-                                if needed_decimals != -1:
-                                    break
-
-                            if needed_decimals == -1:
-                                good = False
-                                break
-                                #return None, None, "couldn't find rounding with the specified number of decimal values"
-
-                            #data["label"] = get_value(surrogate_unit, target_unit, domain, data["label"], self.perturber.nan_fill_str)
-                            if surrogate_unit != units[0]:
-                                target_unit = f"{target_unit} {units[0].replace('[', '').replace(']', '')}"
-
-                            new_units = [target_unit]
-                            new_decimals = {target_unit: max(decimals[units[0]], highest_needed_decimals)}
-                    except Exception as e:
-                        good = False
-                        break
-                        #return None, None, "error in unit retrieval"
-
-                    for num_pert, perturbation in enumerate(self.perturber.pre_hct_perturbations):
-                        if rnd_apply_pre[num_pert] == 1 and i != 0:
-                            attrs = {
-                                "table": new_table,
-                                "value_col": new_value_col
-                            }
-
-                            new_table, new_value_col = perturbation(**attrs)
-
-                    try:
-                        new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
-                                                                                             unit_in_cell=unit_in_cell)
-                        table_before_pivot = new_table.copy()
-                        table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col, new_id_col, new_table_types,
-                                                                            aggr=aggr,
-                                                                            unit_in_cell=unit_in_cell, full_mask=new_full_mask)
-                    except Exception as e:
-                        good = False
-                        break
-                        #return None, None, "table generation error (filling)"
-
-                    if table_hct is None:
-                        good = False
-                        break
-                        #return None, None, "table generation error (pivoting)"
-
-                    table_hct = self.perturber.restore_needed_cells_after_value_merge(
-                        table_before_pivot=table_before_pivot,
-                        pivot_table=table_hct,
-                        value_col=new_value_col,
-                        full_mask=full_mask,
-                        rows_chosen=rows_chosen,
-                        cols_chosen=cols_chosen,
-                    )
-
-                    for num_pert, perturbation in enumerate(self.perturber.post_hct_perturbations):
-                        if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
-                            continue
-                        if rnd_apply_post[num_pert] == 1:
-                            attrs = {
-                                "table": table_hct
-                            }
-
-                            table_hct = perturbation(**attrs)
-
-                    data["decimals"] = new_decimals[new_units[0]]
-                    data["units"] = new_units[0]
-                    if apply_unit_conversions:
-                        for num_tables2 in [2,3,5,10,20]:
-                            if num_tables2 < num_tables:
-                                continue
-                            tables_unit_converted[str(num_tables2)].append(table_hct.copy())
-                            data_unit_converted[str(num_tables2)].append(deepcopy(data))
-                            view_constraints_tot_unit[str(num_tables2)].append(view_constraints)
-                    else:
-                        for num_tables2 in [2,3,5,10,20]:
-                            if num_tables2 < num_tables:
-                                continue
-                            tables_not_unit_converted[str(num_tables2)].append(table_hct.copy())
-                            data_not_unit_converted[str(num_tables2)].append(deepcopy(data))
-                            view_constraints_tot_not_unit[str(num_tables2)].append(view_constraints)
-
-                    #list_of_table_hct.append(table_hct)
-                    #list_of_data.append(data)
-                #datasets[method]["all_perturbations"] = (table_hct, data, constraints)
-
-            if not good:
-                return datasets, decimals[units[0]], None
-
-            for perturbation_name, list_of_table_hct, list_of_data, view_constr in zip(
-                    ["unit_converted", "not_unit_converted"],
-                    [tables_unit_converted[str(num_tables)], tables_not_unit_converted[str(num_tables)]],
-                    [data_unit_converted[str(num_tables)], data_not_unit_converted[str(num_tables)]],
-                    [view_constraints_tot_unit[str(num_tables)], view_constraints_tot_not_unit[str(num_tables)]]
-            ):
-                for method_name in SQL_TEMPLATES:
-                    if method_name in ["extractive", "comparative", "percentage_change"]:
+                if "nl_question" not in data:
+                    data["nl_question"] = self.generate_question(table_hct, data, decimals[units[0]], method=method)
+                    if data["nl_question"] is None:
                         continue
 
-                    if method_name not in datasets[str(num_tables)]:
-                        datasets[str(num_tables)][method_name] = {}
-
-                    data = self.generate_label_multitable(list_of_data, method=method_name)
-                    if data is None:
-                        return None, None, "error in generating multitable data"
-
-                    data["nl_question"], tables_final = self.generate_question_multitable(
-                        list_of_table_hct,
-                        data,
-                        [d["decimals"] for d in list_of_data],
-                        method_name,
-                        unit=list_of_data[0]["units"]
-                    ) #list_of_data["decimals"])
+                    with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
+                        data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"],
+                                                                             table_hct.to_html(index=False), data["label"])
                     if data["nl_question"] is None:
-                        return None, None, "error in generating nl question"
+                        continue
 
-                    #with pd.option_context("display.float_format", lambda x: f"{x:.{list_of_data['decimals']}f}"):
-
-                    data["nl_question"] = self.check_nlquestion_validity(
-                        data["nl_question"],
-                        data["query"],
-                        tables_final,
-                        data["label"],
-                        multi=True,
-                        unit=list_of_data[0]["units"]
-                    )
-                    if data["nl_question"] is None:
-                        return None, None, "error in checking nl question"
-
-                    #print("Label generated")
-                    #print(data)
-                    #for i, t in enumerate(list_of_table_hct):
-                    #    print(f"TABLE {i}")
-                    #    print(t)
-
-                    data["decimals"] = [d["decimals"] for d in list_of_data]
-                    datasets[str(num_tables)][method_name][perturbation_name] = (list_of_table_hct, data, view_constr)
-                    #return list_of_table_hct, data
+                if method not in datasets:
+                    datasets[method] = {}
+                datasets[method][perturbation.__name__] = (table_hct, data, constraints)
 
         return datasets, decimals[units[0]], None
 
@@ -2057,43 +1415,41 @@ class MTAutoGen:
         reduced = [reduce_one_select(p) for p in parts]
         return f"{prefix} (" + " UNION ALL ".join(reduced) + ");"
 
-    def run_multi_table_ablations_fk( # table split by foreign key
+    def run_multi_table_ablations(
             self,
             domain=None,
-            num_tables=2,
-            inter_table_contradiction=False,
-            col_cardinality=8,
-            ablations_relational=False
+            num_columns=6,
+            num_tables=None,
+            method=None,
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
         and for multiple perturbation types (to reduce API costs)
         """
-        #if method in ["extractive", "comparative", "superlative", "sum", "average", "percentage_change"]:
         aggr = "first"
         sampled_canonical_units = get_n_canonical_units(domain, n=20)
+
+        if num_tables is not None and num_tables != -1:
+            num_tables_list = [num_tables]
+        else:
+            num_tables_list = [2, 3, 5, 10, 20]
+
+        col_cardinality = num_tables_list[-1]
 
         # generation of relational table
         result = self.generate_relational_table(
             domain=domain,
-            num_columns=21, #21 columns, so get_table_view_fk chooses 5 new attributes on the first table, and 4 on the others, allowing maximum 5 tables. This constraint can be relaxed by allowing duplicate data across tables
+            num_columns=num_columns,
             col_cardinality=col_cardinality,
             canonical_units=sampled_canonical_units,
         )
-        #with open("result.pkl", "wb") as writer:
-        #    pickle.dump(result, writer)
-
-        #with open("result.pkl", "rb") as reader:
-        #    result = pickle.load(reader) # TODO: remove
 
         if result is None:
             return None, None, "table generation error (result is None)"
 
-        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, id_col, units, decimals = \
+        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, units, decimals = \
             result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
-                result["value_col"], result["id_col"], result["unit_of_measurement"], result["number_of_decimals"]
-
-        ranges = [r[:5] for r in ranges] # TODO: remove
+                result["value_col"], result["unit_of_measurement"], result["number_of_decimals"]
 
         if table_name is None:
             return None, None, "table generation error (table is None)"
@@ -2103,11 +1459,6 @@ class MTAutoGen:
             return None, None, "wrong unit generated"
 
         constraints = self.generate_semantic_constraints(result, domain=domain)
-        #with open("constraints.pkl", "wb") as writer:
-        #    pickle.dump(constraints, writer)
-        #with open("constraints.pkl", "rb") as reader:
-        #    constraints = pickle.load(reader)
-
         if constraints is None:
             return None, None, "semantic constraints generation error"
 
@@ -2118,18 +1469,415 @@ class MTAutoGen:
         self.past_table_names = self.past_table_names[-5:]
         self.past_table_values = self.past_table_values[-5:]
 
-        #cols_to_avoid = []
+        datasets = {}
+        tables_unit_converted, tables_not_unit_converted = {}, {}
+        data_unit_converted, data_not_unit_converted = {}, {}
+
+        view_constraints_tot_unit, view_constraints_tot_not_unit = {}, {}
+        initial_offset = random.randint(0, 10000) # used to guarantee that different runs use different random perturbations
+
+        for it, num_tables in enumerate(num_tables_list):
+            tables_unit_converted[str(num_tables)] = []
+            tables_not_unit_converted[str(num_tables)] = []
+            data_unit_converted[str(num_tables)] = []
+            data_not_unit_converted[str(num_tables)] = []
+            view_constraints_tot_unit[str(num_tables)] = []
+            view_constraints_tot_not_unit[str(num_tables)] = []
+            datasets[str(num_tables)] = {}
 
         columns, constraint_cols, column_to_vary, old_col_values = None, None, None, []
+        good = True
+        for it, num_tables in enumerate(num_tables_list):
+            print(f"Generating for {num_tables} tables...")
+
+            if it == 0:
+                previous_num_tables = 0
+            else:
+                previous_num_tables = num_tables_list[it-1]
+
+            for i in range(previous_num_tables, num_tables):
+                self.set_random_seed(initial_offset+i)
+                table_attributes_view, table_attributes_long_view, table_types_view, range_view = self.get_table_view(
+                    table_attributes,
+                    table_attributes_long,
+                    table_types,
+                    ranges,
+                    value_col,
+                    columns=columns,
+                )
+
+                if column_to_vary is None:
+                    column_to_vary = self.rnd.choice([idx for idx in range(len(table_attributes_view)) if table_types_view[idx] not in ["float", "int"]])
+
+                for idx in range(len(range_view)):
+                    if idx != column_to_vary and table_types_view[idx] not in ["float", "int"]:
+                        range_view[idx] = range_view[idx][:6] # we reduce the combinations of values to avoid too much overhead
+
+
+                # generate random table by filling the values randomly
+                try:
+                    view_constraints = {"inter_row_constraints": [], "intra_row_constraints": []}
+                    for constraint_type in constraints:
+                        for rule in constraints[constraint_type]:
+                            ok = True
+                            if constraint_type == "inter_row_constraints":
+                                conditions = [m.group("cond") for m in re.compile(self.constrainer.ATOM_EXTRACT, re.VERBOSE | re.DOTALL).finditer(rule)]
+                            else:
+                                #conditions = [rule]
+                                m = self.constrainer.PATTERN_intra.match(rule)
+                                if not m:
+                                    raise ValueError(f"Invalid intra rule: {rule!r}")
+                                conditions = [m.group("condition").strip()]
+                                expr = [m.group("expr").strip()]
+                                conditions.extend(expr)
+
+                            for cond in conditions:
+                                cond = cond.strip()
+                                if cond[0] in ["(", ")"]:
+                                    cond = cond[1:]
+                                if cond[-1] in ["(", ")"]:
+                                    cond = cond[:-1]
+                                columns_from_rule = extract_columns(parse_expr(cond))
+                                for col in columns_from_rule:
+                                    if col not in table_attributes_view:
+                                        ok = False
+                                        break
+                                if not ok:
+                                    break
+
+                            if ok:
+                                view_constraints[constraint_type].append(rule)
+
+                    table = self.fill_dense_relational_table(table_attributes_view, table_types_view, range_view, units, decimals, value_col,
+                                                                 semantic_constraints=view_constraints)
+
+                    best_val = None
+                    if i != 0:
+                        best_val = self.choose_constraint_on_new_table(
+                            columns,
+                            column_to_vary,
+                            old_col_values,
+                            table,
+                        )
+
+                        if isinstance(constraint_cols, tuple):
+                            constraint_cols = list(constraint_cols)
+
+                        constraint_cols[column_to_vary] = best_val
+
+                        # rows where the selected columns match the given values
+                        mask = (table[columns] == constraint_cols).all(axis=1)
+
+                        # keep all non-matching rows, and deduplicate matching rows
+                        table = pd.concat([
+                            table[~mask],
+                            table[mask].drop_duplicates(subset=columns, keep="first")
+                        ], ignore_index=True)
+
+                except Exception as e:
+                    good = False
+                    break
+
+                # run sql loading and sql generation/execution
+                try:
+                    data, full_mask = self.generate_label(
+                        table,
+                        table_name,
+                        value_col,
+                        method="extractive", # we force the method to be extractive, as the true method will be applied across tables later
+                        columns=columns,
+                        constraint=constraint_cols,
+                        column_to_vary=column_to_vary,
+                        old_col_values=old_col_values,
+                        best_val=best_val,
+                        all_cols=True,
+                        impose_target_for_extractive=True
+                    )
+                except Exception as e:
+                    good = False
+                    break
+
+                if data is None:
+                    good = False
+                    break
+
+                if columns is None and constraint_cols is None:
+                    columns = data["columns"]
+                    constraint_cols = data["constraint"]
+
+                    if column_to_vary is None:
+                        # I make sure that inter row constraints are kept even when dealing with multiple tables
+                        # for that, in different tables, I vary an attribute that is not part of the inter-row constraints (if any)
+                        columns_to_consider = [col for col in columns if
+                                               col not in str(view_constraints["inter_row_constraints"])]
+                        # the column to vary must not be the value_col
+                        columns_to_consider = [col for col in columns_to_consider if col != value_col]
+                        # the column to vary must have at least num_tables different values, to ensure that we can vary it across tables
+                        columns_to_consider = [col for col in columns_to_consider if table[col].nunique() >= num_tables]
+                        if len(columns_to_consider) == 0:
+                            good = False
+                            break
+
+                        max_val, best_col = -1, None
+                        for col in columns_to_consider:
+                            pos = columns.index(col)
+                            num_samples = len(table[table[columns[pos]] == data["constraint"][pos]])
+                            if num_samples > max_val:
+                                max_val = num_samples
+                                best_col = col
+
+                        column_to_vary = columns.index(best_col)
+
+                old_col_values.append(data["constraint"][column_to_vary])
+
+                table = table[table[columns[column_to_vary]] == data["constraint"][column_to_vary]]
+
+                rnd_apply_nan = self.rnd.randint(0,1)
+                unit_in_cell = self.rnd.randint(0, 1)
+                rnd_apply_pre = []
+                for _ in self.perturber.pre_hct_perturbations:
+                    rnd_apply_pre.append(self.rnd.randint(0,1))
+
+                rnd_apply_post = []
+                for _ in self.perturber.post_hct_perturbations:
+                    rnd_apply_post.append(self.rnd.randint(0,1))
+
+                # adding a sample with all perturbations randomly applied
+                for apply_unit_conversions in [True, False]:
+                    new_table = table.copy()
+                    new_full_mask = full_mask
+                    new_table_types = deepcopy(table_types)
+
+                    self.perturber.set_random_seed(initial_offset+i)
+                    if rnd_apply_nan == 1: # apply perturbation with 50% chance
+                        attrs = {
+                            "table": new_table,
+                            "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
+                            "value_col": value_col,
+                        }
+
+                        new_table = self.perturber.null_perturbation(**attrs)
+
+                    try:
+                        new_table = self.substitute_column_names(new_table, table_attributes_long_view)
+                        new_value_col = table_attributes_long[table_attributes.index(value_col)]
+                    except Exception as e:
+                        good = False
+                        break
+
+                    try:
+                        new_units = units
+                        new_decimals = decimals
+                        if i != 0 and apply_unit_conversions:
+                            needed_decimals = -1
+                            for j in range(5):
+                                surrogate_unit, target_unit = get_random_unit(units[0], domain, seed=initial_offset+i+j)
+                                highest_needed_decimals = -1
+                                for k,row in new_table.iterrows():
+                                    try:
+                                        value_converted, needed_decimals = get_value(
+                                            surrogate_unit,
+                                            target_unit,
+                                            domain,
+                                            row[new_value_col],
+                                            self.perturber.nan_fill_str
+                                        )
+                                    except:
+                                        break
+
+                                    if needed_decimals is not None:
+                                        if needed_decimals == -1:
+                                            break
+
+                                        new_table.at[k, new_value_col] = value_converted
+                                        if needed_decimals > highest_needed_decimals:
+                                            highest_needed_decimals = needed_decimals
+
+                                if needed_decimals != -1:
+                                    break
+
+                            if needed_decimals == -1:
+                                good = False
+                                break
+
+                            if surrogate_unit != units[0]:
+                                target_unit = f"{target_unit} {units[0].replace('[', '').replace(']', '')}"
+
+                            new_units = [target_unit]
+                            new_decimals = {target_unit: max(decimals[units[0]], highest_needed_decimals)}
+                    except Exception as e:
+                        good = False
+                        break
+
+                    for num_pert, perturbation in enumerate(self.perturber.pre_hct_perturbations):
+                        if rnd_apply_pre[num_pert] == 1 and i != 0:
+                            attrs = {
+                                "table": new_table,
+                                "value_col": new_value_col
+                            }
+
+                            new_table, new_value_col = perturbation(**attrs)
+
+                    try:
+                        new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
+                                                                                             unit_in_cell=unit_in_cell)
+                        table_before_pivot = new_table.copy()
+                        table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                            aggr=aggr,
+                                                                            unit_in_cell=unit_in_cell, full_mask=new_full_mask)
+                    except Exception as e:
+                        good = False
+                        break
+
+                    if table_hct is None:
+                        good = False
+                        break
+
+                    table_hct = self.perturber.restore_needed_cells_after_value_merge(
+                        table_before_pivot=table_before_pivot,
+                        pivot_table=table_hct,
+                        value_col=new_value_col,
+                        full_mask=full_mask,
+                        rows_chosen=rows_chosen,
+                        cols_chosen=cols_chosen,
+                    )
+
+                    for num_pert, perturbation in enumerate(self.perturber.post_hct_perturbations):
+                        if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
+                            continue
+                        if rnd_apply_post[num_pert] == 1:
+                            attrs = {
+                                "table": table_hct
+                            }
+
+                            table_hct = perturbation(**attrs)
+
+                    data["decimals"] = new_decimals[new_units[0]]
+                    data["units"] = new_units[0]
+                    if apply_unit_conversions:
+                        for num_tables2 in num_tables_list:
+                            if num_tables2 < num_tables:
+                                continue
+                            tables_unit_converted[str(num_tables2)].append(table_hct.copy())
+                            data_unit_converted[str(num_tables2)].append(deepcopy(data))
+                            view_constraints_tot_unit[str(num_tables2)].append(view_constraints)
+                    else:
+                        for num_tables2 in num_tables_list:
+                            if num_tables2 < num_tables:
+                                continue
+                            tables_not_unit_converted[str(num_tables2)].append(table_hct.copy())
+                            data_not_unit_converted[str(num_tables2)].append(deepcopy(data))
+                            view_constraints_tot_not_unit[str(num_tables2)].append(view_constraints)
+
+            if not good:
+                return datasets, decimals[units[0]], None
+
+            if method is not None:
+                method_list = [method]
+            else:
+                method_list = SQL_TEMPLATES
+
+            for perturbation_name, list_of_table_hct, list_of_data, view_constr in zip(
+                    ["unit_converted", "not_unit_converted"],
+                    [tables_unit_converted[str(num_tables)], tables_not_unit_converted[str(num_tables)]],
+                    [data_unit_converted[str(num_tables)], data_not_unit_converted[str(num_tables)]],
+                    [view_constraints_tot_unit[str(num_tables)], view_constraints_tot_not_unit[str(num_tables)]]
+            ):
+                for method_name in method_list:
+                    if method_name in ["extractive", "comparative", "percentage_change"]:
+                        continue
+
+                    if method_name not in datasets[str(num_tables)]:
+                        datasets[str(num_tables)][method_name] = {}
+
+                    data = self.generate_label_multitable(list_of_data, method=method_name)
+                    if data is None:
+                        return None, None, "error in generating multitable data"
+
+                    data["nl_question"], tables_final = self.generate_question_multitable(
+                        list_of_table_hct,
+                        data,
+                        [d["decimals"] for d in list_of_data],
+                        method_name,
+                        unit=list_of_data[0]["units"]
+                    )
+                    if data["nl_question"] is None:
+                        return None, None, "error in generating nl question"
+
+                    data["nl_question"] = self.check_nlquestion_validity(
+                        data["nl_question"],
+                        data["query"],
+                        tables_final,
+                        data["label"],
+                        multi=True,
+                        unit=list_of_data[0]["units"]
+                    )
+                    if data["nl_question"] is None:
+                        return None, None, "error in checking nl question"
+
+                    data["decimals"] = [d["decimals"] for d in list_of_data]
+                    datasets[str(num_tables)][method_name][perturbation_name] = (list_of_table_hct, data, view_constr)
+
+        return datasets, decimals[units[0]], None
+
+
+
+    def run_multi_table_ablations_fk( # table split by foreign key
+            self,
+            domain=None,
+            num_tables=None,
+            col_cardinality=8,
+            num_columns=21,
+            method=None,
+    ):
+        """
+        we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
+        and for multiple perturbation types (to reduce API costs)
+        """
+        aggr = "first"
+        sampled_canonical_units = get_n_canonical_units(domain, n=20)
+
+        # generation of schema
+        result = self.generate_relational_table(
+            domain=domain,
+            num_columns=num_columns, #21 columns, so get_table_view_fk chooses 5 new attributes on the first table, and 4 on the others, allowing maximum 5 tables. This constraint can be relaxed by allowing duplicate data across tables
+            col_cardinality=col_cardinality,
+            canonical_units=sampled_canonical_units,
+        )
+
+        if result is None:
+            return None, None, "table generation error (result is None)"
+
+        table_name, table_attributes, table_attributes_long, table_types, ranges, value_col, units, decimals = \
+            result["name"], result["attributes"], result["attributes_long"], result["attribute_types"], result["range"], \
+                result["value_col"], result["unit_of_measurement"], result["number_of_decimals"]
+
+        ranges = [r[:5] for r in ranges]
+
+        if table_name is None:
+            return None, None, "table generation error (table is None)"
+        if sum([el == "float" for el in table_types]) > 1:
+            return None, None, "table generation error (too many floats)"
+        if is_unit_in_domain(units[0], domain) is None:
+            return None, None, "wrong unit generated"
+
+        # generation of semantic constraints
+        constraints = self.generate_semantic_constraints(result, domain=domain)
+
+        if constraints is None:
+            return None, None, "semantic constraints generation error"
+
+        self.past_table_names.append(", ".join(table_attributes))
+        self.past_table_values.append(", ".join([str(r) for r in ranges]))
+        self.past_table_names = self.past_table_names[-5:]
+        self.past_table_values = self.past_table_values[-5:]
+
         datasets = {}
         errors = []
 
-        #table = self.fill_dense_relational_table(table_attributes, table_types, ranges, units, decimals,
-        #                                         value_col, id_col, semantic_constraints=constraints)
-
-        initial_offset = random.randint(0, 10000) # used to guarantee that different runs use different random perturbations
-        if ablations_relational:
-            range_tables = [3]
+        initial_offset = random.randint(0, 10000)
+        if num_tables is not None:
+            range_tables = [num_tables]
         else:
             range_tables = [2, 3, 5]
 
@@ -2137,12 +1885,14 @@ class MTAutoGen:
             print(f"Generating with {num_tables} tables...")
             datasets[str(num_tables)] = {}
 
-            for method_name in SQL_TEMPLATES:
+            if method is not None:
+                method_list = [method]
+            else:
+                method_list = SQL_TEMPLATES
+
+            for method_name in method_list:
                 if method_name in ["extractive", "comparative", "percentage_change"]:
                     continue
-
-                """list_of_data = []
-                list_of_table_hct = []"""
 
                 new_decimals = decimals
                 new_units = units
@@ -2159,12 +1909,9 @@ class MTAutoGen:
                     list_of_table_rel = []
 
                     for i in range(num_tables):
-                        """if (p > 0 and num_tables_idx > 0 and i >= range_tables[num_tables_idx-1]) or (p > 0 and num_tables_idx == 0):
-                            self.set_random_seed(initial_offset+p)
-                            self.perturber.set_random_seed(initial_offset+p)"""
-
                         new_value_col = deepcopy(value_col)
 
+                        # extracting schema view
                         table_attributes_view, table_attributes_long_view, table_types_view, range_view = self.get_table_view_fk(
                             table_attributes,
                             table_attributes_long,
@@ -2176,9 +1923,11 @@ class MTAutoGen:
                             is_final = True if i == num_tables-1 else False,
                         )
 
+                        # extracting value to put in the middle of the table
                         if i != num_tables-1:
                             new_value_col = self.rnd.choice([attr for h, attr in enumerate(table_attributes_view) if attr != fk_column and table_types_view[h] not in ["float", "int"]])
 
+                        # latent relational source generation
                         try:
                             view_constraints = {"inter_row_constraints": [], "intra_row_constraints": []}
                             for constraint_type in constraints:
@@ -2186,10 +1935,8 @@ class MTAutoGen:
                                     ok = True
                                     if constraint_type == "inter_row_constraints":
                                         conditions = [m.group("cond") for m in re.compile(self.constrainer.ATOM_EXTRACT,
-                                                                                          re.VERBOSE | re.DOTALL).finditer(
-                                            rule)]
+                                                                                          re.VERBOSE | re.DOTALL).finditer(rule)]
                                     else:
-                                        # conditions = [rule]
                                         m = self.constrainer.PATTERN_intra.match(rule)
                                         if not m:
                                             raise ValueError(f"Invalid intra rule: {rule!r}")
@@ -2221,16 +1968,12 @@ class MTAutoGen:
                                 units,
                                 decimals,
                                 new_value_col, #value_col,
-                                id_col,
                                 semantic_constraints=view_constraints,
                                 col_to_keep=fk_column,
                                 value_to_keep=value_to_keep,
                             )
                             table = table[table_attributes_view].drop_duplicates(keep="first")
                             new_table = table.copy()
-                            #new_table_rel = table.copy()
-                            #new_value_col_rel = deepcopy(new_value_col)
-                            #new_table = new_table[table_attributes_view].drop_duplicates(keep="first")
 
                             if fk_column is not None and i != num_tables-1:
                                 mask = new_table[fk_column].eq(value_to_keep)
@@ -2240,14 +1983,11 @@ class MTAutoGen:
                                 table = table.drop(to_drop)
 
                         except Exception as e:
-                            #print(e)
                             errors.append("error in filling table")
                             good = False
                             break
-                            # return None, None, "error in filling table"
 
                         # run sql loading and sql generation/execution
-                        # data, full_mask = self.generate_label(table, table_name, value_col, id_col, method=method)
                         if i != num_tables-1:
                             method_single_table = "extractive"
                         else:
@@ -2257,7 +1997,6 @@ class MTAutoGen:
                             new_table,
                             table_name,
                             new_value_col,
-                            id_col,
                             method=method_single_table,
                             col_to_keep=fk_column,
                             value_to_keep=value_to_keep,
@@ -2268,35 +2007,33 @@ class MTAutoGen:
                             good = False
                             errors.append(f"error in data generation")
                             break
-                            #return None, None, f"error in data generation for the {i+1}-th table"
 
                         fk_column = data["target"] # column used later to connect to the next table
                         value_to_keep = data["label"]
                         cols_to_avoid.extend([col for col in new_table.columns if col != fk_column])
 
-                        # adding a sample with all perturbations randomly applied with lower strength
-                        # new_table = table.copy()
                         new_full_mask = full_mask
                         new_table_types = deepcopy(table_types)
 
-                        if self.rnd.randint(0,1) == 1: # apply perturbation with 50% chance
+                        if self.rnd.randint(0,1) == 1: # apply null perturbation with 50% chance
                             attrs = {
                                 "table": new_table,
-                                "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
+                                "constraints": list(zip(data["columns"], data["constraint"])),
                                 "value_col": new_value_col,
                             }
                             new_table = self.perturber.null_perturbation(**attrs)
 
+                        # substitute table names with more verbose ones, so to resemble more web-tables
                         try:
                             new_table = self.substitute_column_names(new_table, table_attributes_long_view)
                             new_value_col = table_attributes_long[table_attributes.index(new_value_col)]
-                            new_id_col = table_attributes_long[table_attributes.index(id_col)]
                         except Exception as e:
                             good = False
                             errors.append("column name substitution error")
                             break
 
                         pos_col1, pos_col2 = None, None
+                        # apply pre perturbations
                         for perturbation in self.perturber.pre_hct_perturbations:
                             if self.rnd.randint(0,1) == 1 and i != 0:
                                 attrs = {
@@ -2307,13 +2044,9 @@ class MTAutoGen:
                                     "fk": True
                                 }
 
-                                """if perturbation == self.perturber.column_merging_perturbation:
-                                    attrs["table_rel"] = new_table_rel
-                                    attrs["value_col_rel"] = new_value_col_rel
-                                    new_table, new_value_col, new_table_rel, new_value_col_rel = perturbation(**attrs)
-                                else:"""
                                 new_table, new_value_col, pos_col1, pos_col2 = perturbation(**attrs)
 
+                        # add unit of measurement and apply pivot
                         try:
                             if i != num_tables - 1:
                                 unit_in_cell = None
@@ -2323,7 +2056,7 @@ class MTAutoGen:
                                                                                                      unit_in_cell=unit_in_cell)
 
                             table_before_pivot = new_table.copy()
-                            table_hct, rows_chosen, cols_chosen, option, kept_rows, kept_cols, kept_full = self.perturber.multiheader_perturbation(new_table, new_value_col, new_id_col, new_table_types,
+                            table_hct, rows_chosen, cols_chosen, option, kept_rows, kept_cols, kept_full = self.perturber.multiheader_perturbation(new_table, new_value_col,
                                                                                 aggr=aggr, fk=True,
                                                                                 unit_in_cell=unit_in_cell, full_mask=new_full_mask)
                         except:
@@ -2335,12 +2068,6 @@ class MTAutoGen:
                             good = False
                             errors.append("table generation error (pivoting)")
                             continue
-                            #return None, None, "table generation error (pivoting)"
-
-                        #columns_rel = [new_table_rel.columns[idx] for idx in [new_table.columns.index(el) for el in rows_chosen+cols_chosen]]
-                        #new_table_rel = table.loc[new_table_rel.drop_duplicates(subset=columns_rel, keep="first").index, :]
-                        #new_table_rel = table.loc[kept_rows, :]
-                        #new_table_rel = new_table_rel.iloc[:, kept_cols.to_numpy()]
 
                         if pos_col1 is not None:
                             last_col = kept_full[:, -1].copy()
@@ -2348,6 +2075,7 @@ class MTAutoGen:
                                 kept_full = np.insert(kept_full, pos + k, last_col, axis=1)
                             kept_full = np.delete(kept_full, -1, axis=1)
 
+                        # we reduce the SQL query WHERE constraints, so to make question generation more concise
                         data["query"] = self.reduce_sql_where(data["query"], table, kept_full)
 
                         table_hct = self.perturber.restore_needed_cells_after_value_merge(
@@ -2359,6 +2087,7 @@ class MTAutoGen:
                             cols_chosen=cols_chosen,
                         )
 
+                        # applying post pivot perturbations
                         for perturbation in self.perturber.post_hct_perturbations:
                             if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
                                 continue
@@ -2376,43 +2105,36 @@ class MTAutoGen:
                         list_of_data.append(deepcopy(data))
 
                     if good:
-                        """if p > 0 and num_tables_idx == 0:
-                            initial_offset += p"""
                         break
 
                 if not good:
                     continue
-            #for method_name in SQL_TEMPLATES:
-                #if method_name in ["extractive", "comparative", "percentage_change"]:
-                #    continue
 
                 if method_name not in datasets[str(num_tables)]:
                     datasets[str(num_tables)][method_name] = {}
 
+                # generating final label
                 data = self.generate_label_multitable_fk(list_of_data, method=method_name)
                 if data is None:
                     errors.append("error in generating multitable data")
                     continue
-                    #return None, None, "error in generating multitable data"
 
-                #data["nl_question"] = "sample question"
-                #data["nl_question"] = "sample question"
-
+                # generating nl question
                 data["nl_question"], tables_final = self.generate_question_multitable_fk(
                     list_of_table_hct,
                     data,
                     [d["decimals"] for d in list_of_data],
                     method_name,
-                ) #list_of_data["decimals"])
+                )
+
                 if data["nl_question"] is None:
                     errors.append("error in generating nl question")
                     continue
-                    # return None, None, "error in generating nl question"
 
-                #with pd.option_context("display.float_format", lambda x: f"{x:.{list_of_data['decimals']}f}"):
+                # checking nl question
                 data["nl_question"] = self.check_nlquestion_validity_fk(
                     data["nl_question"],
-                    data, #["query"],
+                    data,
                     tables_final,
                     data["label"],
                     multi=True,
@@ -2421,23 +2143,19 @@ class MTAutoGen:
                 if data["nl_question"] is None:
                     errors.append("error in checking nl question")
                     continue
-                    #return None, None, "error in checking nl question"
 
                 data["decimals"] = [d["decimals"] for d in list_of_data]
-                random.shuffle(list_of_table_hct)
+                random.shuffle(list_of_table_hct) # shuffling the table order to increase complexity
                 datasets[str(num_tables)][method_name]["sequential"] = (list_of_table_hct, data, constraints)
-                #return list_of_table_hct, data
 
         return datasets, decimals[units[0]], "\n".join(errors) if len(errors) > 0 else None
 
-    def run_ablations(self, num_tables: int = 1, num_samples: int = 1, domain: str | None = None, sequential: bool = False):
+    def run_generation(self, num_tables: int = -1, num_samples: int = 1, domain: str | None = None, sequential: bool = False, method: str | None = None, col_cardinality: int = 8, num_columns: int = 6):
         if num_tables == 1:
             datasets, datasets_df, error_logs = {}, {}, []
             perturbations_to_apply = [self.perturber.null_perturbation] + \
                                      self.perturber.pre_hct_perturbations + \
-                                     self.perturber.post_hct_perturbations + \
-                                     self.intra_ambiguous_perturber.perturbations + \
-                                     ["all_perturbations"]
+                                     self.perturber.post_hct_perturbations
 
             for method in SQL_TEMPLATES:
                 datasets[method] = {}
@@ -2451,7 +2169,7 @@ class MTAutoGen:
                     datasets[method][perturbation_name] = []
 
             for _ in tqdm(range(num_samples), desc="Generating samples..."):
-                result, decimals, error_log = self.run_one_table_ablations(domain=domain)
+                result, decimals, error_log = self.run_one_table_ablations(domain=domain, method=method, col_cardinality=col_cardinality, num_columns=num_columns)
                 if result is None:
                     print(f"Error in sample generation: {error_log}")
                     error_logs.append(error_log)
@@ -2474,7 +2192,7 @@ class MTAutoGen:
                                         result[method][perturbation_name][1]["query"],
                                         method,
                                         result[method][perturbation_name][0].to_html(index=True),
-                                        result[method][perturbation_name][2], # constraints
+                                        result[method][perturbation_name][2],
                                         result[method][perturbation_name][1]["label"],
                                     ])
                         except:
@@ -2489,31 +2207,46 @@ class MTAutoGen:
             datasets, datasets_df, error_logs = {}, {}, {}
             if not sequential:
                 perturbation_names = ["unit_converted", "not_unit_converted"]
-                ranges = [2,3,5,10,20]
+                if num_tables != -1:
+                    ranges = [num_tables]
+                else:
+                    ranges = [2,3,5,10,20]
             else:
                 perturbation_names = ["sequential"]
-                ranges = [2,3,5]
+                if num_tables != -1:
+                    ranges = [num_tables]
+                else:
+                    ranges = [2,3,5]
 
-            for num_tables in ranges:
-                datasets[str(num_tables)] = {}
-                datasets_df[str(num_tables)] = {}
-                error_logs[str(num_tables)] = []
+            # setting up data containers
+            for num_tables_r in ranges:
+                datasets[str(num_tables_r)] = {}
+                datasets_df[str(num_tables_r)] = {}
+                error_logs[str(num_tables_r)] = []
 
-                for method in SQL_TEMPLATES:
-                    if not sequential and method in ["extractive", "comparative", "percentage_change"]:
+                for method_tmp in SQL_TEMPLATES:
+                    if not sequential and method_tmp in ["extractive", "comparative", "percentage_change"]:
                         continue
-                    datasets[str(num_tables)][method] = {}
-                    datasets_df[str(num_tables)][method] = {}
+                    datasets[str(num_tables_r)][method_tmp] = {}
+                    datasets_df[str(num_tables_r)][method_tmp] = {}
 
                     for perturbation_name in perturbation_names:
-                        datasets[str(num_tables)][method][perturbation_name] = []
+                        datasets[str(num_tables_r)][method_tmp][perturbation_name] = []
 
+            # generating samples...
             for _ in tqdm(range(num_samples), desc="Generating samples..."):
                 try:
-                    if sequential:
-                        result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, num_tables=num_tables)
+                    if num_tables != -1:
+                        if sequential:
+                            result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, num_tables=num_tables, method=method, col_cardinality=col_cardinality, num_columns=num_columns)
+                        else:
+                            result, decimals, error_log = self.run_multi_table_ablations(domain=domain, num_tables=num_tables, method=method, num_columns=num_columns)
                     else:
-                        result, decimals, error_log = self.run_multi_table_ablations(domain=domain, num_tables=num_tables, col_cardinality=20)
+                        if sequential:
+                            result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, method=method)
+                        else:
+                            result, decimals, error_log = self.run_multi_table_ablations(domain=domain, method=method)
+
                 except:
                     continue
 
@@ -2525,15 +2258,19 @@ class MTAutoGen:
                     if error_log is not None:
                         print(f"Error in sample generation: {error_log}")
                         error_logs[str(num_tables)].append(error_log)
-                    #print(result)
+
+                if method is not None:
+                    method_list = [method]
+                else:
+                    method_list = SQL_TEMPLATES
 
                 for num_tables in ranges:
-                    for method in SQL_TEMPLATES:
-                        if not sequential and method in ["extractive", "comparative", "percentage_change"]:
+                    for method in method_list:
+                        if not sequential and method in ["extractive", "comparative", "percentage_change"]: # skipping single-table queries
                             continue
 
                         for perturbation_name in perturbation_names:
-                            #try:
+                            try:
                                 if method in result[str(num_tables)] and perturbation_name in result[str(num_tables)][method]:
                                     text = ""
                                     for i, table in enumerate(result[str(num_tables)][method][perturbation_name][0]):
@@ -2546,14 +2283,19 @@ class MTAutoGen:
                                         result[str(num_tables)][method][perturbation_name][1]["query"],
                                         method,
                                         text,
-                                        #"\n\n".join([f"Table {i}\n\n{table.to_html(index=True)}" for i, table in enumerate(result[method][perturbation_name][0])]),
                                         result[str(num_tables)][method][perturbation_name][2],  # constraints
                                         result[str(num_tables)][method][perturbation_name][1]["label"],
                                     ])
-                            #except:
-                            #    continue
+                            except:
+                                continue
                 print("Current lengths:")
-                if 'unit_converted' in datasets['2']['average'] or 'not_unit_converted' in datasets['2']['average']:
+                for nt in datasets:
+                    for m in datasets[nt]:
+                        if "unit_converted" in datasets[nt][m]:
+                            print(f"\t {nt} tables: {len(datasets[nt][m]["unit_converted"])}")
+                        else:
+                            print(f"\t {nt} tables: {len(datasets[nt][m]["sequential"])}")
+                """if 'unit_converted' in datasets['2']['average'] or 'not_unit_converted' in datasets['2']['average']:
                     print(f"\t 2 tables: {len(datasets['2']['average']['unit_converted'])}")
                     print(f"\t 3 tables: {len(datasets['3']['average']['unit_converted'])}")
                     print(f"\t 5 tables: {len(datasets['5']['average']['unit_converted'])}")
@@ -2562,9 +2304,7 @@ class MTAutoGen:
                 else:
                     print(f"\t 2 tables: {len(datasets['2']['average']['sequential'])}")
                     print(f"\t 3 tables: {len(datasets['3']['average']['sequential'])}")
-                    print(f"\t 5 tables: {len(datasets['5']['average']['sequential'])}")
-                    #print(f"\t 10 tables: {len(datasets['10']['average']['sequential'])}")
-                    #print(f"\t 20 tables: {len(datasets['20']['average']['sequential'])}")
+                    print(f"\t 5 tables: {len(datasets['5']['average']['sequential'])}")"""
 
             for num_tables in datasets:
                 for k1 in datasets[str(num_tables)]:
@@ -2575,18 +2315,9 @@ class MTAutoGen:
 
             return datasets_df, error_logs
 
-    def run_bird_comparison(self, num_tables: int = 1, method: str = "average", question_type: str = "parallel"):
+    def run_real_comparison(self, num_tables: int = 1, question_type: str = "parallel"):
         from spider_table_extraction import find_densest_pivot, extract_tables_from_sqlite_directories
         import pickle
-
-        """with open("bird_tables/tables.pkl", "rb") as reader:
-            tables = pickle.load(reader)
-
-        with open("bird_tables/categorical_cols_per_table.pkl", "rb") as reader:
-            categorical_cols_per_table = pickle.load(reader)
-
-        with open("bird_tables/float_cols_per_table.pkl", "rb") as reader:
-            float_cols_per_table = pickle.load(reader)"""
 
         tables_dataset = pd.read_csv("pivot_task/exports/qualifying_dense_pivots_verified_moredbs.csv")
         tables_dataset = pd.concat(
@@ -2619,18 +2350,7 @@ class MTAutoGen:
         cols_split += tables_dataset["column_attributes"].apply(lambda x: [[el.strip() for el in x.split(";")]])
         tables = [pd.read_csv(path) for path in tables_dataset["table_csv_path"]]
 
-        """root_dir = "./bird/train/train_databases/"
-        tables, float_cols_per_table, categorical_cols_per_table = extract_tables_from_sqlite_directories(
-            root_dir=root_dir,
-            seed=123,
-            target_n_tables=50,
-            min_rows=200,
-            min_categorical_cols=4,
-            min_float_cols=1,
-            drop_duplicates=True,
-        )"""
-
-        path = "datasets/bird/"
+        path = "datasets/real/"
         os.makedirs(path, exist_ok=True)
 
         datasets = {}
@@ -2651,23 +2371,7 @@ class MTAutoGen:
             decimals = len(str(table[fcol].iloc[0]).split(".")[-1])
 
             table_relational = table.drop_duplicates(subset=cols, keep="first")
-            """sub_results = []
-            mask_total = pd.Series([False] * len(table_relational))
-            for row_pair in best['row_pairs']:
-                for col_pair in best['col_pairs']:
-                    mask = pd.Series([True] * len(table_relational))
-                    pairs = list(row_pair) + list(col_pair)
-                    for pair, col in zip(pairs, cols):
-                        mask &= (table_relational[col] == pair).reset_index(drop=True)
-                    #filtered_table = table_relational[mask.tolist()]
 
-                    mask_total |= mask
-                    #sub_results.append(filtered_table)
-
-            table_relational = table_relational[mask_total.tolist()]
-            table_relational = table_relational[cols+[fcol]]
-            table_relational = table_relational.drop_duplicates(subset=cols)"""
-            #table_relational = pd.concat(sub_results)
             tables_relational.append(table_relational)
             new_table = table_relational.copy()
             new_value_col = fcol
@@ -2675,13 +2379,13 @@ class MTAutoGen:
             tables_unit_converted, tables_not_unit_converted, tables_relational_final = [], [], []
             data_unit_converted, data_not_unit_converted, data_relational = [], [], []
             units, decimals = ["unit"], len(str(table[fcol].iloc[0]).split(".")[-1])
-            #table[fcol] = table[fcol].apply(lambda x: round(x, decimals))
 
             if num_tables == 1:
+                first = True
                 for j, method in enumerate(SQL_TEMPLATES):
                     if method not in ["average", "sum", "superlative"]:
                         continue
-                    #table_rel = table_rel[cols + [fcol]]
+
                     new_table = table_relational[cols + [fcol]].copy()
                     new_table = new_table.drop_duplicates(subset=cols, keep="first")
                     new_value_col = fcol
@@ -2696,10 +2400,9 @@ class MTAutoGen:
                             new_table,
                             "sample_table",
                             new_value_col,
-                            "",
                             method=method,
                         )
-                    except:
+                    except Exception as e:
                         continue
 
                     if data is None:
@@ -2750,8 +2453,8 @@ class MTAutoGen:
                         table_before_pivot = new_table.copy()
                         table_hct, rows_chosen, cols_chosen, _ = self.perturber.multiheader_perturbation(new_table,
                                                                                                          new_value_col,
-                                                                                                         "",
-                                                                                                         [],
+                                                                                                         #"",
+                                                                                                         #[],
                                                                                                          aggr="first",
                                                                                                          unit_in_cell=unit_in_cell,
                                                                                                          full_mask=full_mask)
@@ -2800,11 +2503,11 @@ class MTAutoGen:
                     datasets[method]["non_relational"].append((table_hct, data))
                     datasets[method]["relational"].append((table_relational_to_load, data))
 
-                    #if j == 0:
-                    print(f"Single table sample number {num} added to dataset")
+                    if first:
+                        print(f"Single table sample number {num} added to dataset")
+                        first = False
             elif question_type == "parallel":
-                # columns, constraint_cols, column_to_vary, old_col_values, inter_table_contradiction, best_val = None, None, None, [], None, None
-                columns, constraint_cols, column_to_vary, old_col_values, best_val, inter_table_contradiction = None, None, None, [], None, False
+                columns, constraint_cols, column_to_vary, old_col_values, best_val = None, None, None, [], None
                 old_constraint_cols = None
                 good = True
                 table = table.drop_duplicates(subset=cols)
@@ -2826,7 +2529,6 @@ class MTAutoGen:
                                 column_to_vary,
                                 old_col_values,
                                 table_rel,
-                                inter_table_contradiction
                             )
 
                             if old_constraint_cols is not None:
@@ -2856,12 +2558,6 @@ class MTAutoGen:
                                     good = False
                                     break
 
-                            """dup_mask = (table_rel[columns] == constraint_cols).all(axis=1)
-    
-                            match_idx = table_rel.index[dup_mask]
-                            if len(match_idx) > 1:
-                                table_rel = table_rel.drop(match_idx[1:])"""
-
                             # rows where the selected columns match the given values
                             mask = (table_rel[columns] == constraint_cols).all(axis=1)
 
@@ -2884,14 +2580,11 @@ class MTAutoGen:
                             table_rel,
                             "sample_table",
                             new_value_col,
-                            id_col = "",
-                            method="extractive",
-                            # we force the method to be extractive, as the true method will be applied across tables later
+                            method="extractive", # we force the method to be extractive, as the true method will be applied across tables later
                             columns=columns,
                             constraint=constraint_cols,
                             column_to_vary=column_to_vary,
                             old_col_values=old_col_values,
-                            inter_table_contradiction=inter_table_contradiction,
                             best_val=best_val,
                             impose_target_for_extractive=True,
                             #all_cols=True
@@ -2961,59 +2654,57 @@ class MTAutoGen:
                         new_table = table_rel.copy()
                         new_full_mask = full_mask
                         new_value_col = fcol
-                        #new_table_types = deepcopy(table_types)
 
-                        #try:
-                        if i != 0 and apply_unit_conversions:
-                            needed_decimals = -1
-                            for j in range(5):
-                                surrogate_unit, target_unit = get_random_unit(units[0], "finance") #using financial domain to use millions, thousands etc. notation
-                                highest_needed_decimals = -1
-                                for k, row in new_table.iterrows():
-                                    try:
-                                        value_converted, needed_decimals = get_value(
-                                            surrogate_unit,
-                                            target_unit,
-                                            "finance",
-                                            round(row[new_value_col], 10), # avoid strange infinite decimals
-                                            self.perturber.nan_fill_str
-                                        )
-                                    except:
-                                        good = False
+                        try:
+                            if i != 0 and apply_unit_conversions:
+                                needed_decimals = -1
+                                for j in range(5):
+                                    surrogate_unit, target_unit = get_random_unit(units[0], "finance") #using financial domain to use millions, thousands etc. notation
+                                    highest_needed_decimals = -1
+                                    for k, row in new_table.iterrows():
+                                        try:
+                                            value_converted, needed_decimals = get_value(
+                                                surrogate_unit,
+                                                target_unit,
+                                                "finance",
+                                                round(row[new_value_col], 10), # avoid strange infinite decimals
+                                                self.perturber.nan_fill_str
+                                            )
+                                        except:
+                                            good = False
+                                            break
+
+                                        if needed_decimals is not None:
+                                            if needed_decimals == -1:
+                                                break
+                                                # return None, None, "couldn't find rounding with the specified number of decimal values"
+
+                                            # new_table.at[k, new_value_col] = round(value_converted, needed_decimals)
+                                            new_table.at[k, new_value_col] = value_converted
+                                            if needed_decimals > highest_needed_decimals:
+                                                highest_needed_decimals = needed_decimals
+
+                                    if needed_decimals != -1:
+                                        #good = False
                                         break
 
-                                    if needed_decimals is not None:
-                                        if needed_decimals == -1:
-                                            break
-                                            # return None, None, "couldn't find rounding with the specified number of decimal values"
-
-                                        # new_table.at[k, new_value_col] = round(value_converted, needed_decimals)
-                                        new_table.at[k, new_value_col] = value_converted
-                                        if needed_decimals > highest_needed_decimals:
-                                            highest_needed_decimals = needed_decimals
-
-                                if needed_decimals != -1:
-                                    #good = False
+                                if needed_decimals == -1:
+                                    good = False
                                     break
 
-                            if needed_decimals == -1:
-                                good = False
-                                break
+                                # data["label"] = get_value(surrogate_unit, target_unit, domain, data["label"], self.perturber.nan_fill_str)
+                                if surrogate_unit != units[0]:
+                                    target_unit = f"{target_unit} {units[0].replace('[', '').replace(']', '')}"
 
-                            # data["label"] = get_value(surrogate_unit, target_unit, domain, data["label"], self.perturber.nan_fill_str)
-                            if surrogate_unit != units[0]:
-                                target_unit = f"{target_unit} {units[0].replace('[', '').replace(']', '')}"
-
-                            new_units = [target_unit]
-                            new_decimals = max(decimals, highest_needed_decimals) #{target_unit: max(decimals, highest_needed_decimals)}
-                        else:
-                            new_units = ["units"]
-                            new_decimals = decimals
-                        """except:
+                                new_units = [target_unit]
+                                new_decimals = max(decimals, highest_needed_decimals) #{target_unit: max(decimals, highest_needed_decimals)}
+                            else:
+                                new_units = ["units"]
+                                new_decimals = decimals
+                        except:
                             good = False
-                            break""" # TODO: uncomment
+                            break
 
-                        #if self.rnd.randint(0,1) >= 0:
                         attrs = {
                             "table": new_table,
                             "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
@@ -3046,36 +2737,33 @@ class MTAutoGen:
                                 col1, col2 = None, None
                                 is_value_col = True
 
-                        #try:
-                        unit_in_cell = self.rnd.randint(0, 1)
-                        new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
-                                                                                             unit_in_cell=unit_in_cell)
-                        table_before_pivot = new_table.copy()
+                        try:
+                            unit_in_cell = self.rnd.randint(0, 1)
+                            new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
+                                                                                                 unit_in_cell=unit_in_cell)
+                            table_before_pivot = new_table.copy()
 
-                        if col1 and col1 in rows_chosen:
-                            rows_chosen.remove(col1)
-                        if col1 and col1 in cols_chosen:
-                            cols_chosen.remove(col1)
-                        if col2 and col2 in rows_chosen:
-                            rows_chosen.remove(col2)
-                        if col2 and col2 in cols_chosen:
-                            cols_chosen.remove(col2)
+                            if col1 and col1 in rows_chosen:
+                                rows_chosen.remove(col1)
+                            if col1 and col1 in cols_chosen:
+                                cols_chosen.remove(col1)
+                            if col2 and col2 in rows_chosen:
+                                rows_chosen.remove(col2)
+                            if col2 and col2 in cols_chosen:
+                                cols_chosen.remove(col2)
 
-                        if not is_value_col:
-                            rows_chosen.append(f"{col1} ({col2})")
+                            if not is_value_col:
+                                rows_chosen.append(f"{col1} ({col2})")
 
-                        #new_table = new_table.sample(frac=1, random_state=i).reset_index(drop=True)
+                            table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                                #"", [],
+                                                                                aggr="first",
+                                                                                unit_in_cell=unit_in_cell, full_mask=new_full_mask,
+                                                                                rows_chosen=rows_chosen, cols_chosen=cols_chosen)
 
-                        table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
-                                                                            "", [],
-                                                                            aggr="first",
-                                                                            unit_in_cell=unit_in_cell, full_mask=new_full_mask,
-                                                                            rows_chosen=rows_chosen, cols_chosen=cols_chosen)
-                            #table_hct = table_hct.sample(frac=1, random_state=i).reset_index(drop=True)
-
-                        """except:
+                        except:
                             good = False
-                            break"""
+                            break
 
                         if table_hct is None:
                             good = False
@@ -3093,7 +2781,7 @@ class MTAutoGen:
                         for perturbation in self.perturber.post_hct_perturbations:
                             if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
                                 continue
-                            #if self.rnd.randint(0,1) >= 0:
+
                             attrs = {
                                 "table": table_hct
                             }
@@ -3125,293 +2813,6 @@ class MTAutoGen:
                     for method in SQL_TEMPLATES:
                         if method not in ["average", "sum", "superlative"]:
                             continue
-                        if method not in datasets:
-                            datasets[method] = {}
-
-                        data = self.generate_label_multitable(list_of_data, method=method)
-                        if data is None:
-                            continue
-
-                        data["nl_question"], tables_final = self.generate_question_multitable(
-                            list_of_table_hct,
-                            data,
-                            [d["decimals"] for d in list_of_data],
-                            method,
-                            unit=list_of_data[0]["units"]
-                        )
-                        if data["nl_question"] is None:
-                            continue
-
-                        data["nl_question"] = self.check_nlquestion_validity(
-                            data["nl_question"],
-                            data["query"],
-                            tables_final,
-                            data["label"],
-                            multi=True,
-                            unit=list_of_data[0]["units"]
-                        )
-                        if data["nl_question"] is None:
-                            continue
-
-                        if perturbation_name not in datasets[method]:
-                            datasets[method][perturbation_name] = []
-
-                        data["decimals"] = [d["decimals"] for d in list_of_data]
-                        datasets[method][perturbation_name].append((list_of_table_hct, data))
-
-                        if first:
-                            print(f"Multi table sample number {num} added to dataset")
-                            first = False
-
-            else:
-                # columns, constraint_cols, column_to_vary, old_col_values, inter_table_contradiction, best_val = None, None, None, [], None, None
-                columns, constraint_cols, column_to_vary, old_col_values, best_val, inter_table_contradiction = None, None, None, [], None, False
-                old_constraint_cols = None
-                good = True
-                table = table.drop_duplicates(subset=cols)
-
-                for i in range(num_tables):
-                    table_rel = table.copy()
-                    table_rel = table_rel[cols + [fcol]]
-                    table_rel = table_rel.drop_duplicates(subset=cols)
-                    table_rel[cols] = table_rel[cols].fillna("None")
-                    table_rel = table_rel.dropna(subset=[fcol])
-                    new_value_col = fcol
-                    table_rel[new_value_col] = table_rel[new_value_col].apply(lambda x: round(x, decimals))
-                    table_relational_to_load = table_rel.copy()
-
-                    try:
-                        data, full_mask = self.generate_label(
-                            table_rel,
-                            "sample_table",
-                            new_value_col,
-                            id_col="",
-                            method="extractive",
-                            # we force the method to be extractive, as the true method will be applied across tables later
-                            columns=columns,
-                            constraint=constraint_cols,
-                            column_to_vary=column_to_vary,
-                            old_col_values=old_col_values,
-                            inter_table_contradiction=inter_table_contradiction,
-                            best_val=best_val,
-                            impose_target_for_extractive=True,
-                            # all_cols=True
-                        )
-                    except:
-                        good = False
-                        break
-
-                    if data is None:
-                        good = False
-                        break
-
-                    if columns is None and constraint_cols is None:
-                        columns = data["columns"]
-                        constraint_cols = data["constraint"]
-
-                        # I make sure that inter row constraints are kept even when dealing with multiple tables
-                        # for that, in different tables, I vary an attribute that is not part of the inter-row constraints (if any)
-                        columns_to_consider = [col for col in columns]
-                        # the column to vary must not be the value_col
-                        columns_to_consider = [col for col in columns_to_consider if col != new_value_col]
-                        # the column to vary must have at least num_tables different values, to ensure that we can vary it across tables
-                        columns_to_consider = [col for col in columns_to_consider if
-                                               table_rel[col].nunique() >= num_tables]
-                        if len(columns_to_consider) == 0:
-                            good = False
-                            break
-
-                        max_val, best_col = -1, None
-                        for col in columns_to_consider:
-                            pos = columns.index(col)
-                            num_samples = len(table_rel[table_rel[columns[pos]] == data["constraint"][pos]])
-                            if num_samples > max_val:
-                                max_val = num_samples
-                                best_col = col
-
-                        column_to_vary = columns.index(best_col)
-
-                    old_col_values.append(data["constraint"][column_to_vary])
-
-                    table_rel = table_rel[table_rel[columns[column_to_vary]] == data["constraint"][column_to_vary]]
-                    table_relational_to_load = table_relational_to_load[
-                        table_relational_to_load[columns[column_to_vary]] == data["constraint"][column_to_vary]]
-
-                    if table_relational_to_load.shape[0] * table_relational_to_load.shape[1] > 100:
-                        required_mask = full_mask.loc[table_relational_to_load.index]
-                        max_rows = max(1, 100 // table_relational_to_load.shape[1])
-
-                        if required_mask.sum() <= max_rows:
-                            kept_mask = required_mask.copy()
-                            extra_needed = max_rows - required_mask.sum()
-
-                            if extra_needed > 0:
-                                extra_indices = table_relational_to_load.index[~required_mask][:extra_needed]
-                                kept_mask.loc[extra_indices] = True
-
-                            table_relational_to_load = table_relational_to_load.loc[kept_mask]
-                        else:
-                            # keep all required rows in their original order
-                            table_relational_to_load = table_relational_to_load.loc[required_mask]
-
-                    # adding a sample with all perturbations randomly applied with lower strength
-                    for apply_unit_conversions in [True, False]:
-                        self.set_random_seed(num + i)
-                        self.perturber.set_random_seed(num + i)
-                        new_table = table_rel.copy()
-                        new_full_mask = full_mask
-                        new_value_col = fcol
-                        # new_table_types = deepcopy(table_types)
-
-                        # try:
-                        if i != 0 and apply_unit_conversions:
-                            needed_decimals = -1
-                            for j in range(5):
-                                surrogate_unit, target_unit = get_random_unit(units[0],
-                                                                              "finance")  # using financial domain to use millions, thousands etc. notation
-                                highest_needed_decimals = -1
-                                for k, row in new_table.iterrows():
-                                    try:
-                                        value_converted, needed_decimals = get_value(
-                                            surrogate_unit,
-                                            target_unit,
-                                            "finance",
-                                            round(row[new_value_col], 10),  # avoid strange infinite decimals
-                                            self.perturber.nan_fill_str
-                                        )
-                                    except:
-                                        good = False
-                                        break
-
-                                    if needed_decimals is not None:
-                                        if needed_decimals == -1:
-                                            break
-                                            # return None, None, "couldn't find rounding with the specified number of decimal values"
-
-                                        # new_table.at[k, new_value_col] = round(value_converted, needed_decimals)
-                                        new_table.at[k, new_value_col] = value_converted
-                                        if needed_decimals > highest_needed_decimals:
-                                            highest_needed_decimals = needed_decimals
-
-                                if needed_decimals != -1:
-                                    # good = False
-                                    break
-
-                            if needed_decimals == -1:
-                                good = False
-                                break
-
-                            # data["label"] = get_value(surrogate_unit, target_unit, domain, data["label"], self.perturber.nan_fill_str)
-                            if surrogate_unit != units[0]:
-                                target_unit = f"{target_unit} {units[0].replace('[', '').replace(']', '')}"
-
-                            new_units = [target_unit]
-                            new_decimals = max(decimals,
-                                               highest_needed_decimals)  # {target_unit: max(decimals, highest_needed_decimals)}
-                        else:
-                            new_units = ["units"]
-                            new_decimals = decimals
-                        """except:
-                            good = False
-                            break"""  # TODO: uncomment
-
-                        if self.rnd.randint(0, 1) == 1:  # apply perturbation with 50% chance
-                            attrs = {
-                                "table": new_table,
-                                "constraints": list(zip(data["columns"], data["constraint"])),
-                                # {k: v for k, v in zip(data["columns"], data["constraint"])},
-                                "value_col": new_value_col,
-                            }
-                            new_table = self.perturber.null_perturbation(**attrs)
-
-                        for perturbation in self.perturber.pre_hct_perturbations:
-                            if self.rnd.randint(0, 1) == 1 and i != 0:
-                                attrs = {
-                                    "table": new_table,
-                                    "value_col": new_value_col
-                                }
-
-                                new_table, new_value_col = perturbation(**attrs)
-
-                        try:
-                            unit_in_cell = self.rnd.randint(0, 1)
-                            new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table,
-                                                                                                 new_value_col,
-                                                                                                 new_units,
-                                                                                                 unit_in_cell=unit_in_cell)
-                            table_before_pivot = new_table.copy()
-                            if i == 0:
-                                rows_chosen = c_split[0]
-                                cols_chosen = c_split[1]
-                            elif i == 1:
-                                rows_chosen = c_split[1]
-                                cols_chosen = c_split[0]
-                            else:
-                                rows_chosen = self.rnd.sample(c_split[0], k=len(c_split[0]))
-                                cols_chosen = self.rnd.sample(c_split[1], k=len(c_split[1]))
-
-                            # new_table = new_table.sample(frac=1, random_state=i).reset_index(drop=True)
-                            table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(
-                                new_table, new_value_col,
-                                "", [],
-                                aggr="first",
-                                unit_in_cell=unit_in_cell, full_mask=new_full_mask,
-                                rows_chosen=rows_chosen, cols_chosen=cols_chosen)
-                            # table_hct = table_hct.sample(frac=1, random_state=i).reset_index(drop=True)
-
-                        except:
-                            good = False
-                            break
-
-                        if table_hct is None:
-                            good = False
-                            break
-
-                        table_hct = self.perturber.restore_needed_cells_after_value_merge(
-                            table_before_pivot=table_before_pivot,
-                            pivot_table=table_hct,
-                            value_col=new_value_col,
-                            full_mask=full_mask,
-                            rows_chosen=rows_chosen,
-                            cols_chosen=cols_chosen,
-                        )
-
-                        for perturbation in self.perturber.post_hct_perturbations:
-                            if perturbation == self.perturber.insert_blank_columns and option == 0:  # may cancel unit of measurement
-                                continue
-                            if self.rnd.randint(0, 1) == 1:
-                                attrs = {
-                                    "table": table_hct
-                                }
-
-                                table_hct = perturbation(**attrs)
-
-                        data["decimals"] = new_decimals
-                        data["units"] = new_units[0]
-                        if apply_unit_conversions:
-                            tables_unit_converted.append(table_hct.copy())
-                            data_unit_converted.append(deepcopy(data))
-                        else:
-                            tables_not_unit_converted.append(table_hct.copy())
-                            data_not_unit_converted.append(deepcopy(data))
-
-                    tables_relational_final.append(table_relational_to_load.copy())
-                    data_relational.append(deepcopy(data_unit_converted[-1]))
-
-                if not good:
-                    continue
-
-                first = True
-                for num_question, (perturbation_name, list_of_table_hct, list_of_data) in enumerate(zip(
-                        ["unit_converted", "not_unit_converted", "relational_multi_table"],
-                        [tables_unit_converted, tables_not_unit_converted, tables_relational_final],
-                        [data_unit_converted, data_not_unit_converted, data_relational]
-                )):
-
-                    for method in SQL_TEMPLATES:
-                        if method not in ["average", "sum", "superlative"]:
-                            continue
-
                         if method not in datasets:
                             datasets[method] = {}
 

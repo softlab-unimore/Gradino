@@ -53,7 +53,6 @@ class Perturber:
         ]
 
         self.pre_hct_perturbations = [
-            # self.null_perturbation,  # cell level perturbation
             self.column_merging_perturbation,  # schema/row level perturbation #pre
             # self.row_merging_perturbation,  # schema/row level perturbation #pre
         ]
@@ -119,29 +118,21 @@ class Perturber:
 
             n_rows = self.num_rows_range[1] # TODO: remove
 
-            """if n_keep_rows > n_rows:
-                print("Too many needed rows!")
-                return None # number of needed rows is higher than the rows we want to keep
-                #rows_to_keep = keep_rows_idx
-            else:"""
             candidates = pivot.index.difference(keep_rows_idx)
             n_to_sample = max(0, n_rows - n_keep_rows)
             if n_to_sample > len(candidates):
                 sampled = candidates
             else:
-                #sampled = pd.Index(
-                #    rng.choice(candidates.to_list(), size=n_to_sample, replace=False)
-                #)
                 sampled_pos = rng.choice(len(candidates), size=n_to_sample, replace=False)
                 sampled = candidates.take(sampled_pos)
 
             rows_to_keep = keep_rows_idx.union(sampled)
             pivot = pivot.loc[rows_to_keep]
 
-        # Columns
+        # columns
         if reduce_cols:
             keep_cols_idx = pivot.columns.intersection(keep_cols)
-            n_keep_cols = len(keep_cols_idx) #len(keep_cols_idx.names) #len(keep_cols_idx)
+            n_keep_cols = len(keep_cols_idx)
             if n_keep_cols > self.num_columns_range[1]:
                 #print("Too many needed columns!")
                 return None
@@ -151,20 +142,11 @@ class Perturber:
 
             n_cols = self.num_columns_range[1] # TODO: remove
 
-
-            """if n_keep_cols > n_cols:
-                print("Too many needed columns!")
-                return None
-                #cols_to_keep = keep_cols_idx
-            else:"""
             candidates = pivot.columns.difference(keep_cols_idx)
             n_to_sample = max(0, n_cols - n_keep_cols)
             if n_to_sample > len(candidates):
                 sampled = candidates
             else:
-                #sampled = pd.Index(
-                #    rng.choice(candidates.to_list(), size=n_to_sample, replace=False)
-                #)
                 sampled_pos = rng.choice(len(candidates), size=n_to_sample, replace=False)
                 sampled = candidates.take(sampled_pos)
 
@@ -444,16 +426,13 @@ class Perturber:
             value from table_before_pivot[value_col]
         """
         if pivot_table is None or table_before_pivot is None or full_mask is None:
-            #print("*********************************************************** failure 1")
             return pivot_table
 
         if value_col not in table_before_pivot.columns:
-            #print("*********************************************************** failure 2")
             return pivot_table
 
         needed_indices = full_mask[full_mask].index
         if len(needed_indices) == 0:
-            #print("*********************************************************** failure 3")
             return pivot_table
 
         out = pivot_table.copy()
@@ -482,8 +461,6 @@ class Perturber:
     def multiheader_perturbation(self,
                                  table: pd.DataFrame,
                                  value_col: str,
-                                 id_col: str,
-                                 table_types: list,
                                  aggr='first',
                                  unit_in_cell: bool = False,
                                  full_mask: pd.Series | None = None,
@@ -492,12 +469,7 @@ class Perturber:
                                  fk=False):
 
         columns = list(table.columns)
-        #table_types.pop(columns.index(value_col))
         columns.pop(columns.index(value_col))
-        #if id_col in columns:
-        #    table_types.pop(columns.index(id_col))
-        #    columns.pop(columns.index(id_col))
-        #columns = [col for i, col in enumerate(columns) if table_types[i] == 'categorical']
         if len(columns) < 2:
             return None, None, None, None
 
@@ -505,8 +477,7 @@ class Perturber:
         while counter < patience:
             counter += 1
             num_col_indices = self.rng.randint(1, len(columns)-1)
-            #cols_chosen = random.sample(columns, num_col_indices)
-            #rows_chosen = [col for col in columns if col not in cols_chosen]
+
             if rows_chosen is None and cols_chosen is None or counter > 1:
                 rows_chosen, cols_chosen, density = self._choose_best_pivot_split(table, columns, value_col, aggr=aggr)
             if rows_chosen is None:
@@ -544,7 +515,6 @@ class Perturber:
                     break
             except:
                 pass
-            #pivot_small = pivot
 
         if pivot_small is None:
             return None, None, None, None
@@ -597,13 +567,6 @@ class Perturber:
 
                 new_row = pd.DataFrame(new_row, columns=pivot_small.columns, index=new_index)
                 pivot_small = pd.concat([new_row, pivot_small], axis=0)
-            #elif option == 2:
-                # concatenates the new_value_col to each column name
-            #    cols = [col if not isinstance(col, tuple) else " ".join([str(el) for el in list(col)]) for col in pivot_small.columns]
-            #    pivot_small.columns = [f"{new_value_col} - {col}" if not only_unit else f"{col} ({new_value_col})" for col in cols]
-            """else:
-                # add an additional multi-header level with the new_value_col
-                pivot.columns = pd.MultiIndex.from_product([[new_value_col], pivot.columns])"""
 
         if fk:
             return pivot_small, rows_chosen, cols_chosen, option, kept_table_rows, kept_table_cols, kept_table_full_mask
@@ -804,10 +767,8 @@ class Perturber:
 
                 if not insertion_positions:
                     # fallback: insert at the end
-                    #pos = n
                     pos = [n]
                 else:
-                    #pos = random.choice(insertion_positions)
                     pos = self.rng.sample(insertion_positions, max(1, int(len(insertion_positions)*strength/100)))
 
                 noises = self.rng.choices(unicode_noise_chars, k=len(pos))
@@ -839,7 +800,7 @@ class Perturber:
                 elems[k] = perturb_string(elem_str, strength)
                 return tuple(elems)
 
-            # Single-level label
+            # single-level label
             if isinstance(label, str) and has_textual_chars(label):
                 return perturb_string(label, strength)
             return label

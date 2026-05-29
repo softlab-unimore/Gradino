@@ -19,20 +19,13 @@ from ucumvert import PintUcumRegistry
 from pprint import pprint
 
 
-# ============================================================
-# Online sources
-# ============================================================
-
+# online conversion sources
 QUDT_UNITS_TTL_URL = "http://qudt.org/3.1.11/vocab/unit"
 UNECE_REC20_XLSX_URL = "https://unece.org/sites/default/files/2023-10/rec20_Rev17e-2021.xlsx"
 XBRL_UTR_XML_URL = "https://www.xbrl.org/utr/utr.xml"
 
 QUDT = Namespace("http://qudt.org/schema/qudt/")
 
-
-# ============================================================
-# Common helpers
-# ============================================================
 
 @dataclass
 class ConversionEntry:
@@ -76,9 +69,7 @@ def _normalize_text(s: str) -> str:
     return s
 
 
-# ============================================================
-# QUDT loaders (environmental / products)
-# ============================================================
+# QUDT loaders (environmental / products domains)
 
 def _load_qudt_graph() -> Graph:
     g = Graph()
@@ -213,9 +204,7 @@ def _build_qudt_conversion_dict(
     return out
 
 
-# ============================================================
-# Environmental
-# ============================================================
+# environmental
 
 def build_environmental_conversion_dict() -> Dict[str, dict]:
     environmental_qks = {
@@ -249,9 +238,7 @@ def build_environmental_conversion_dict() -> Dict[str, dict]:
     )
 
 
-# ============================================================
-# Healthcare (rewritten with ucumvert)
-# ============================================================
+# healthcare
 
 def build_healthcare_conversion_dict() -> Dict[str, dict]:
     """
@@ -275,11 +262,6 @@ def build_healthcare_conversion_dict() -> Dict[str, dict]:
         }
       }
     }
-
-    Fixes applied:
-    - correct affine handling for temperature
-    - proper grouping for stable compound healthcare units
-    - numeric factors for compound units with stable metrological conversions
     """
     ureg = PintUcumRegistry()
 
@@ -340,16 +322,16 @@ def build_healthcare_conversion_dict() -> Dict[str, dict]:
         factor_to_canonical = None
         offset_to_canonical = None
 
-        # Temperature must be handled as affine transforms, not by converting "1 unit".
+        # temperature must be handled as affine transforms, not by converting "1 unit".
         if quantity_kind == "Temperature":
             factor_to_canonical, offset_to_canonical = _healthcare_temperature_params(ucum_code)
 
-        # Arbitrary units remain non-convertible.
+        # arbitrary units remain non-convertible.
         elif quantity_kind == "ArbitraryClinicalUnit":
             factor_to_canonical = None
             offset_to_canonical = None
 
-        # All other stable units can use multiplicative conversion.
+        # all other stable units can use multiplicative conversion.
         elif canonical_unit is not None:
             try:
                 factor_to_canonical = _ucum_factor_to_canonical(
@@ -500,19 +482,13 @@ def _healthcare_aliases(ucum_code: str) -> list[str]:
     }
     return alias_map.get(ucum_code, [])
 
-# ============================================================
-# Products
-# ============================================================
+# products
 
 def build_products_conversion_dict() -> Dict[str, dict]:
     """
     Product tables usually need:
     1) official trade/unit codes (UNECE Rec 20)
     2) stable conversion math for physical dimensions (QUDT)
-
-    This version uses the UNECE HTML vocabulary page because:
-    - the XLSX URL currently returns 403
-    - the advertised JSON-LD URL currently returns 404
     """
     qudt = _build_qudt_conversion_dict(
         allowed_quantity_kinds={"Mass", "Length", "Area", "Volume", "Temperature", "Time"},
@@ -596,20 +572,14 @@ def _load_unece_rec20_html_pairs() -> list[tuple[str, str]]:
     return out
 
 
-# ============================================================
-# Finance
-# ============================================================
+# finance
 
 def build_finance_conversion_dict() -> Dict[str, dict]:
     """
-    Finance has very few true stable 'unit conversions' beyond:
+    very few true stable unit conversions beyond:
     - decimal scales (thousand, million, billion, trillion)
     - ratio/pure/percent/basis-point normalization
     - count-like units such as shares
-
-    This version fixes CurrencyRepresentation so it includes only genuine
-    monetary units from XBRL UTR, instead of accidentally pulling in
-    physical/scientific units.
     """
     xml_bytes = _http_get(XBRL_UTR_XML_URL).content
     root = ET.fromstring(xml_bytes)
@@ -758,27 +728,27 @@ def _is_monetary_xbrl_unit(unit_id: str, item_type: str, ns_unit: str, unit_name
     if uid in ["GWM", "MWM", "MVA", "TEU", "Volume_per_Monetary", "Energy_per_Monetary", "Emissions_per_Monetary"]:
         return False
 
-    # Strong positive signal from item type
+    # strong positive signal from item type
     if "monetary" in it:
         return True
 
-    # Many XBRL monetary units sit in ISO4217 namespace.
+    # many XBRL monetary units sit in ISO4217 namespace.
     if "iso4217" in ns:
         return True
 
-    # Exclude obvious non-currency units that sometimes appear in the UTR.
+    # exclude obvious non-currency units that sometimes appear in the UTR.
     non_currency_ids = {
         "pure", "shares", "share", "count", "rate",
     }
     if uid in non_currency_ids:
         return False
 
-    # Typical current/historical ISO 4217 and XBRL-style monetary unit IDs
+    # typical current/historical ISO 4217 and XBRL-style monetary unit IDs
     # are 3 uppercase letters. This intentionally includes historical codes.
     if re.fullmatch(r"[A-Z]{3}", uid):
         return True
 
-    # Special monetary / unit-of-account codes used in structured reporting.
+    # special monetary / unit-of-account codes used in structured reporting.
     special_monetary_units = {
         "XDR", "CHE", "CHW", "BOV", "CLF", "COU", "MXV", "UYI", "UYW",
         "USN", "USS", "XSU", "XUA", "XBA", "XBB", "XBC", "XBD", "XFU",
@@ -790,10 +760,6 @@ def _is_monetary_xbrl_unit(unit_id: str, item_type: str, ns_unit: str, unit_name
     return False
 
 
-# ============================================================
-# Build all
-# ============================================================
-
 def build_all_domain_conversion_dicts() -> Dict[str, dict]:
     return {
         "environmental": build_environmental_conversion_dict(),
@@ -802,10 +768,7 @@ def build_all_domain_conversion_dicts() -> Dict[str, dict]:
         "products": build_products_conversion_dict(),
     }
 
-
-# ============================================================
-# Generic converter for the produced dictionaries
-# ============================================================
+# converter
 
 def count_decimals(x):
     s = str(x)
@@ -870,9 +833,7 @@ def convert_value(
     return value_converted, needed_decimals_number
 
 
-# ============================================================
-# Example usage
-# ============================================================
+# example usage
 
 @lru_cache
 def get_unit_env(domain: str) -> dict:
@@ -891,12 +852,10 @@ def get_unit_env(domain: str) -> dict:
 
 def is_unit_in_domain(unit: str, domain: str):
     env = get_unit_env(domain)
-    #is_canonical = False
     category_found = None
     for category in env:
         try: # the dictionary may possibly have typos
             if unit == env[category]["canonical_unit"]:
-                #is_canonical = True
                 category_found = category
                 break
 
@@ -912,7 +871,7 @@ def is_unit_in_domain(unit: str, domain: str):
         except:
             continue
 
-    return category_found #is_canonical, category_found
+    return category_found
 
 def get_random_unit(unit: str, domain: str, seed: int = 0):
     env = get_unit_env(domain)
@@ -935,10 +894,6 @@ def get_random_unit(unit: str, domain: str, seed: int = 0):
         if possible_unit == surrogate_initial_unit or surrogate_initial_unit in env[category_to_consider]["units"][possible_unit].get("aliases"):
             continue
 
-        """if domain == "environmental" and "[" in possible_unit:
-            possible_unit_cleaned = possible_unit.replace("[", "").replace("]", "")
-        else:
-            possible_unit_cleaned = possible_unit"""
         possible_unit_cleaned = possible_unit
 
         if not (domain == "environmental" and ("." in possible_unit_cleaned)):
@@ -1031,7 +986,6 @@ if __name__ == "__main__":
             print(f"{value} {unit} to {unit_new}: {converted_value}")
         else:
             print(f"{value} {unit} to {random_unit}: {converted_value}")
-    print(a)
 
     # Healthcare examples
     print("500 mg -> g =", convert_value(500, "mg", "g", healthcare))

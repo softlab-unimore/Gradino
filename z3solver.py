@@ -35,7 +35,6 @@ class BoolOpToZ3(ast.NodeTransformer):
         return node
 
 DASH_TOKEN = "DASHDASHDASH"
-#_dash_ident = re.compile(r"([A-Za-z_][A-Za-z0-9_]*(?:--[A-Za-z0-9_]+)+)")
 
 @lru_cache(maxsize=None)
 def python_bool_to_z3_call(expr_str: str) -> str:
@@ -43,8 +42,6 @@ def python_bool_to_z3_call(expr_str: str) -> str:
     Returns a rewritten source string, e.g.
       "(a or b) and not c" -> "And(Or(a, b), Not(c))"
     """
-
-    #escaped = _dash_ident.sub(lambda m: m.group(1).replace("--", DASH_TOKEN), expr_str)
 
     tree = ast.parse(expr_str, mode="eval")
     tree = BoolOpToZ3().visit(tree)
@@ -64,7 +61,6 @@ class Z3Solver:
         self.ctx = Context()
         self.solver = Solver(ctx=self.ctx)
         self.optimizer = Optimize(ctx=self.ctx)
-        #self.var_to_value = {}
         self.xs, self.vars_by_name, self.enum_by_name = [], {}, {}
         self.cellTypes, self.z3_domains = {}, {}
         self.value_col_domain = None
@@ -109,7 +105,7 @@ class Z3Solver:
         def _substitute(match: re.Match) -> str:
             inner = match.group("inner")
 
-            # Replace each whitespace run with the same number of underscores
+            # replacing each whitespace run with the same number of underscores
             # inner = re.sub(r"\s+", lambda m: "_" * len(m.group(0)), inner)
             inner = inner.replace("\"", "").replace("'", "")
 
@@ -124,7 +120,7 @@ class Z3Solver:
 
             return ph
 
-        # Match either "..." or '...', allowing escaped chars inside.
+        # matching either "..." or '...', allowing escaped chars inside.
         pattern = r"(?P<q>['\"])(?P<inner>(?:\\.|(?!\1).)*?)\1"
         return re.sub(pattern, _substitute, rule)
 
@@ -155,9 +151,7 @@ class Z3Solver:
             if variable_name in self.vars_by_name:
                 continue
             colname = variable_name.split("_")[-2]
-            #pos_colname = columns.index(colname)
-            #if pos_colname == -1:
-            #    return None
+
             if variable_types[colname] != "int":
                 xs_local.append(Const(variable_name, self.cellTypes[colname]))
                 to_optimize.append(False)
@@ -166,14 +160,8 @@ class Z3Solver:
                 to_optimize.append(True)
 
             colnames.append(colname)
-            self.xs.append(xs_local[-1]) #Const(variable_name, self.cellTypes[colname]))
+            self.xs.append(xs_local[-1])
             self.vars_by_name[variable_name] = xs_local[-1]
-
-            #self.enum_by_name |= {name: val for name, val in zip(domains[pos_colname], z3_domains[pos_colname])}
-
-        """xs = [Const(v, cellType) for v in variable_names]
-        vars_by_name = {v: x for v, x in zip(variable_names, xs)}
-        enum_by_name = {name: val for name, val in zip(domain, z3_domain)}"""
 
         if isinstance(rules[0][0], str):
             conds, exprs = [self.preprocess_rule(rule[0]) for rule in rules], [self.preprocess_rule(rule[1]) for rule in rules]
@@ -185,7 +173,6 @@ class Z3Solver:
                 rules = [Implies(cond_rule, expr_rule) for cond_rule, expr_rule in zip(cond_rules, expr_rules)]
             else:
                 rules = []
-            #rules = self.rules_from_strings(rules, vars_by_name, enum_by_name)
 
         self.solver.add(*rules)
 
@@ -344,20 +331,14 @@ class Z3Solver:
 
     def _opt_bound(self, rules, x, kind="max", rule_vars=None, var_to_rules=None):
         filtered_rules = self._relevant_rules_for_var(rules, x, rule_vars, var_to_rules) # taking only the rules needed for variable x
-        #key = self._opt_cache_key(filtered_rules, kind, x) # per formula caching
-
-        #if key in self._opt_cache:
-        #    return self._opt_cache[key]
 
         self.optimizer.add(*filtered_rules)
         h = self.optimizer.maximize(x) if kind == "max" else self.optimizer.minimize(x)
         res = self.optimizer.check()
         if res != sat:
-        #    self._opt_cache[key] = None
             return None
 
         val = str(self.optimizer.upper(h)) if kind == "max" else str(self.optimizer.lower(h))
-        #self._opt_cache[key] = val
         return val
 
     def _solv_bound(self, rules, x, rule_vars=None, var_to_rules=None, gap=50):
@@ -422,19 +403,11 @@ class Z3Solver:
         following `variables` ordering, get the maximum and minimum value of the variable, and randomly sample from there
         the process is repeated for each variable, until we get a solution
         """
-        if index is not None:
-            external_variables = self.find_external_variables(variables, index)
-        else:
-            external_variables = []
-
-        max_signature, max_mapping = self._opt_cache_key(rules, "max")
-        min_signature, min_mapping = self._opt_cache_key(rules, "min")
 
         self.optimizer = Optimize(ctx=self.ctx)
 
         if len(rules) == 0:
             return var_to_value, rules
-        #self.init_solver()
 
         xs, allowed_variables, non_value_variables, non_value_xs = [], [], [], []
         for v in set(variables): # + list(var_to_value.keys())):
@@ -448,7 +421,6 @@ class Z3Solver:
                 xs.append(Real(v, ctx=self.ctx) if variable_types[colname].lower().strip() == "float" else Int(v, ctx=self.ctx))
             allowed_variables.append(v)
 
-        #xs = [Real(v) if value_col_type.lower().strip() == "float" else Int(v) for v in variables] + self.xs
         vars_by_name = {var_name: value for var_name, value in zip(allowed_variables, xs) if var_name not in self.vars_by_name} | self.vars_by_name
 
         rules_str = [rule for rule in rules if isinstance(rule, str)]
@@ -481,11 +453,6 @@ class Z3Solver:
 
             rules += rules_cond
 
-        #for x, v_name in zip(xs, non_value_variables):
-        #result = _pick_discrete_model(non_value_xs, rules)
-        #var_to_value |= result
-        #rules += self.rules_from_strings([f"{k} == {v}" for k,v in result.items()], vars_by_name, self.enum_by_name)
-
         domain_rules = []
         for x, v_name in zip(xs, allowed_variables):
             if v_name in non_value_variables or value_col not in v_name:
@@ -496,41 +463,25 @@ class Z3Solver:
 
         domain_rules = self.rules_from_strings(domain_rules, vars_by_name, self.enum_by_name)
         rules += domain_rules
-        #self.optimizer.add(*rules)
-
-        """dependant = False
-        for x, v_name in zip(xs, allowed_variables):
-            #if v_name in var_to_value and v_name.split("_")[-1] != str(index):
-            if v_name.split("_")[-1] != str(index):
-                dependant = True
-                break"""
 
         for x, v_name in zip(xs, allowed_variables):
             if v_name in non_value_variables or v_name in var_to_value:
                 continue
 
-            dependant = self.is_variable_dependant(v_name, rules, var_to_value)
-
-            #if not dependant and max_signature in self._opt_cache and max_mapping[v_name] in self._opt_cache[max_signature]:
-            #    max_v = self._opt_cache[max_signature][max_mapping[v_name]] # this is the error: in subsequent iterations, it may use bounds that are not updated wrt. other variables
-            #    min_v = self._opt_cache[min_signature][min_mapping[v_name]]
-            #else:
             rule_vars, var_to_rules = self._build_rule_index(rules)
-            if True: #max_signature in self._opt_cache and max_mapping[v_name] in self._opt_cache[max_signature]:
-                self.solver = Solver(ctx=self.ctx)
-                min_v, max_v = self._solv_bound(rules, x, rule_vars, var_to_rules)
-            else:
-                self.optimizer = Optimize(ctx=self.ctx)
-                max_v = self._opt_bound(rules, x, "max", rule_vars, var_to_rules)
-                if max_signature not in self._opt_cache:
-                    self._opt_cache[max_signature] = {}
-                self._opt_cache[max_signature][max_mapping[v_name]] = max_v
+            self.solver = Solver(ctx=self.ctx)
+            min_v, max_v = self._solv_bound(rules, x, rule_vars, var_to_rules)
+            """self.optimizer = Optimize(ctx=self.ctx)
+            max_v = self._opt_bound(rules, x, "max", rule_vars, var_to_rules)
+            if max_signature not in self._opt_cache:
+                self._opt_cache[max_signature] = {}
+            self._opt_cache[max_signature][max_mapping[v_name]] = max_v
 
-                self.optimizer = Optimize(ctx=self.ctx)
-                min_v = self._opt_bound(rules, x, "min", rule_vars, var_to_rules)
-                if min_signature not in self._opt_cache:
-                    self._opt_cache[min_signature] = {}
-                self._opt_cache[min_signature][min_mapping[v_name]] = min_v
+            self.optimizer = Optimize(ctx=self.ctx)
+            min_v = self._opt_bound(rules, x, "min", rule_vars, var_to_rules)
+            if min_signature not in self._opt_cache:
+                self._opt_cache[min_signature] = {}
+            self._opt_cache[min_signature][min_mapping[v_name]] = min_v"""
 
             if max_v is None or min_v is None:
                 return None, None
@@ -541,17 +492,14 @@ class Z3Solver:
                 return None, None
 
             col_name = v_name.split("_")[-2]
-            if variable_types[col_name] == "float": #variable_types[value_col] == "float":
+            if variable_types[col_name] == "float":
                 value = random.uniform(float(min_v), float(max_v))
-            elif variable_types[col_name] == "int": #variable_types[value_col] == "int":
+            elif variable_types[col_name] == "int":
                 value = random.randint(int(min_v), int(max_v))
             else:
                 return None, None
-                #raise ValueError(f"unknown type {value_col_type} for mathematical optimization")
 
             var_to_value[v_name] = value
-            #self.optimizer.add(x == value)
-            #rules.append(f"{v_name} == {value}")
             rules += self.rules_from_strings([f"{v_name} == {value}"], vars_by_name, {})
 
         new_vars = {}
@@ -569,12 +517,12 @@ class Z3Solver:
 
 
     def inter_chooser(self, rules, variables, value_col, variable_types, var_to_value, index=None):
-        if any(["**" in rule or "%" in rule for rule in rules]):
-            # solution space is not continuous: we apply randomization by adding random constraints
+        if any(["%" in rule for rule in rules]):
+            # solution space is not continuous
             return None, None
         else:
-            # solution space is continuous (linear): we get the max and min of the solution following the variable ordering
-            # we sample from those bounds, and repeat the process for each variable
+            # solution space is continuous
+            # we sample correct values, and repeat the process for each variable
 
             var_to_value, rules = self.sample_from_maxmin(rules, variables, value_col, variable_types, var_to_value, index=index)
 

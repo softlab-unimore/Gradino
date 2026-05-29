@@ -52,12 +52,9 @@ class SQLSampler:
         df.to_sql(table_name, self.conn, index=False, if_exists='replace')
 
     def get_combination(self, df: pd.DataFrame, table_name, value_col, all_cols=False, col_to_keep=None, value_to_keep=None, **kwargs):
-        #df.to_sql(table_name, self.conn, index=False, if_exists='replace')
         self.load_table(df, table_name)
         columns = list(df.columns)
         columns.pop(columns.index(value_col))
-        #if id_col in columns:
-        #    columns.pop(columns.index(id_col))
 
         all_combos = []
         if all_cols:
@@ -84,7 +81,7 @@ class SQLSampler:
         return unique_combo, list(combo)
 
 
-    def get_extractive_clusters(self, table: pd.DataFrame, table_name: str, id_col: str):
+    def get_extractive_clusters(self, table: pd.DataFrame, table_name: str):
         """
         trying to get value pairs that are bijective, so that when we ask a natural language question, the response is unique.
         we use union-find to detect the clusters of connected values (by "connected" we mean that the values are in a one-to-one relationship between each other)
@@ -97,11 +94,7 @@ class SQLSampler:
         columns = table.columns.tolist()
 
         for i, col1 in enumerate(columns):
-            if col1 == id_col:
-                continue
             for col2 in columns[i + 1:]:
-                if col2 == id_col:
-                    continue
                 # check for one-to-one mapping between col1 and col2
                 query = f"""
                     SELECT {col1}, {col2}

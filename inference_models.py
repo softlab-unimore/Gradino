@@ -15,19 +15,19 @@ from prompts.inference import prompt_final_gpt5, prompt_total_gpt5
 load_dotenv()
 
 def remove_markdown_syntax(text: str) -> str:
-    # Remove triple backtick code blocks (```python ... ```)
+    # removing triple backtick code blocks (```python ... ```)
     text = re.sub(r"```[\s\S]*?```", lambda m: re.sub(r"^```.*\n|```$", '', m.group()), text)
 
-    # Remove inline code (`code`)
+    # removing inline code (`code`)
     text = re.sub(r"`([^`]*)`", r"\1", text)
 
-    # Remove bold (**text** or __text__)
+    # removing bold (**text** or __text__)
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
 
-    # Remove italic (*text* or _text_)
+    # removing italic (*text* or _text_)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
 
-    # Remove blockquotes
+    # removing blockquotes
     text = re.sub(r"^>\s?", '', text, flags=re.MULTILINE)
 
     text = text.replace("python", "")
@@ -64,7 +64,7 @@ class OpenAIModel(BaseModel):
     temperature_question: float = Field(.0000000000000000000001, strict=True, description="The temperature of the model in between 0 and 1")
     top_p: float = Field(.1, strict=True, description="The top_p of the model in between 0 and 1")
     top_p_question: float = Field(.0000000000000000000001, strict=True, description="The top_p of the model in between 0 and 1")
-    client: Any = None # OpenAI()
+    client: Any = None
     max_retries: int = Field(50, strict=True, description="Number of retries in case of failed OpenAI API call")
 
     def init_client(self):
@@ -94,7 +94,6 @@ class OpenAIModel(BaseModel):
                 model=self.model_name if not create_question else self.question_model_name,
                 messages=messages,
                 temperature=temp,
-                # top_p=self.top_p if not create_question else self.top_p_question,
                 seed=42,
         )
 
@@ -171,14 +170,10 @@ class OpenAIModel(BaseModel):
         python_text_raw, _ = self.call_gpt(messages)
 
         python_code = remove_markdown_syntax(extract_result(python_text_raw, "Final answer:"))
-        #print(python_code)
         results, error = self.execute(python_code, attr, fallback_prompt)
 
         if error:
             print("Error in pot parsing, falling back to cot...")
-            #results = remove_markdown_syntax(extract_result(results, "Final answer:"))
-            #text = fallback_prompt+ "\n" + response[0]
-            #results[1]["text"] = text
             return results
 
         continuation_message = [
@@ -198,7 +193,6 @@ class OpenAIModel(BaseModel):
         results_final[1]["text"] = text
 
         # final answer
-        #results = self.remove_markdown_syntax(self.extract_result(results, "Final answer:"))
         return results_final
 
 
@@ -231,7 +225,7 @@ class QwenModel(BaseModel):
                 temperature=self.temperature,
                 top_p=self.top_p,
                 seed=42,
-                max_tokens=16184,
+                max_tokens=16384,
         )
 
         metadata = {

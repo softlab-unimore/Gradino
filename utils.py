@@ -14,11 +14,14 @@ def is_float(value):
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--question_type', type=str, default='extractive', help='Type of question to generate')
+    parser.add_argument('--question_type', type=str, default=None, choices=["sum", "average", "superlative"], help='Question aggregation type')
     parser.add_argument('--domain', type=str, default=None, choices=["finance", "healthcare", "products", "environmental"], help='Domain of the tables')
-    parser.add_argument('--num_tables', type=int, default=1, help='Number of tables to generate')
+    parser.add_argument('--num_tables', type=int, default=-1, help='Number of tables to generate')
     parser.add_argument('--sequential', action="store_true", help="Apply generation of sequential multi-table data")
-    parser.add_argument('--generate_ablations', action="store_true", help='Number of tables to generate')
+    parser.add_argument('--generate_ablations', action="store_true", help='Run ablation generation')
+    parser.add_argument('--num_samples', type=int, default=50, help='Number of samples to generate')
+    parser.add_argument('--col_cardinality', type=int, default=20, help='Number of samples to generate')
+    parser.add_argument('--num_columns', type=int, default=21, help='Number of samples to generate')
 
     args = vars(parser.parse_args())
 
@@ -31,12 +34,13 @@ def get_args_test():
     parser.add_argument('--model', type=str, required=True, help='Model name')
     parser.add_argument('--pot', action="store_true", help='Apply POT ablation. Works with gpt models')
     parser.add_argument('--tatqa', action="store_true", help='Whether the dataset is tatqa or not')
-    parser.add_argument('--bird', action="store_true", help='Execute BIRD ablations')
+    parser.add_argument('--real', action="store_true", help='Execute BIRD ablations')
     parser.add_argument('--griqa', action="store_true", help='Whether the dataset is griqa or not')
 
     args = vars(parser.parse_args())
-    if args['tatqa'] and args['bird']:
-        raise ValueError("Cannot use both tatqa and bird")
+    s = sum([args['tatqa'], args['real'], args['griqa']])
+    if s > 1:
+        raise ValueError("Cannot use both tatqa, real or griqa simultaneously")
     return args
 
 def replace_many(text: str, repl: dict[str, str]) -> str:

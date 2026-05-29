@@ -28,11 +28,9 @@ def normalize_text(series):
         .str.replace(r'[^a-z0-9]+', '', regex=True)
     )
 
-# Try numeric parsing
 pred_num = extract_first_number(df["Prediction"])
 label_num = extract_first_number(df["Label"])
 
-# Decide whether this is a numeric or text matching task
 numeric_mode = label_num.notna().sum() > 0 and label_num.notna().sum() == len(df)
 
 if numeric_mode:
@@ -41,8 +39,6 @@ else:
     pred_text = normalize_text(df["Prediction"])
     label_text = normalize_text(df["Label"])
 
-    # Flexible yes/no detection for predictions like:
-    # "No.", "No — explanation...", "Yes: ..."
     def to_binary_label(s):
         s = str(s)
         if s.startswith("yes"):

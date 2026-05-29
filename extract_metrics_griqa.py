@@ -12,40 +12,10 @@ def preprocessing_range(row):
     row['response'] = re.sub(r'[–—]', '-', row['response'])
     return row
 
-def preprocessing_range_tablellama(row, dataset):
-    row['response'] = re.sub(r'[<>]', '', row['response'])
-
-    if dataset == 'extra':
-        row['response'] = re.sub(r'[,]', ' -', row['response'])
-
-    row['response'] = re.sub(r'\d+(\.\d+)?', lambda m: f"{float(m.group()):.3f}", row['response'])
-    row['value'] = re.sub(r'\d+(\.\d+)?', lambda m: f"{float(m.group()):.3f}", row['value'])
-    return row
-
-def preprocessing_range_finma(row, dataset):
-    if dataset == 'extra':
-        row['response'] = row['response'].replace('and', '-')
-    else: # rel dataset
-        row['response'] = row['response'].replace(' and ', ', ')
-    return row
-
-def preprocessing_range_tattllm(row, dataset):
-    if dataset == 'extra':
-        row['response'] = row['response'].replace('#', ' - ')
-        row['value'] = re.sub(r'[-–—]', '-', row['value'])
-    elif dataset == 'rel':
-        row['response'] = row['response'].replace('#', ', ')
-        row['response'] = re.sub(r'\d+(\.\d+)?', lambda m: f"{float(m.group()):.3f}", row['response'])
-        row['value'] = re.sub(r'\d+(\.\d+)?', lambda m: f"{float(m.group()):.3f}", row['value'])
-    return row
-
 def preprocessing_range_openai(row, dataset):
     row['response'] = re.sub(r'[a-zA-Z]+(\d+)', '', row['response'])
     row['response'] = re.sub(r"[a-zA-Z\u2080-\u2089()/€]", "", row['response']).strip(' ')
 
-    #if dataset == 'extra':
-    #    row['response'] = re.sub(r'(\d+\.\d+)\s+(\d+\.\d+)', r"\1 - \2", row['response'])
-    #else:
     row['response'] = re.sub(r'(\d+)\s+(\d+)', r'\1, \2', row['response'])
     row['response'] = re.sub(r'\s*,\s*|\s+', ', ', row['response'])
 
@@ -90,28 +60,18 @@ if __name__ == '__main__':
 
         percentage = True if '%' in row['Question'] or 'percentage' in row['Question'] else False
 
-        #if args.dataset == 'extra':
-        #    range = True if re.match(r'^\d+(\.\d+)?\s*[-–—]\s*\d+(\.\d+)?$', row['value']) else False
-        #else: # rel dataset
         range = True if re.match(r'^\s*\d+(\.\d+)?\s*,\s*\d+(\.\d+)?(\s*,\s*\d+(\.\d+)?)*\s*$', row['value']) else False
 
-        # Check for range
+        # check for range
         if range:
             row = preprocessing_range(row)
-            """if model == 'tablellama':
-                row = preprocessing_range_tablellama(row, args.dataset)
-            if model == 'finma':
-                row = preprocessing_range_finma(row, args.dataset)
-            if model == 'tatllm__end_to_end' or model == 'tatllm__step_wise':
-                row = preprocessing_range_tattllm(row, args.dataset)
-            if model == 'openai' or model == 'openai_chainofthought':"""
             row = preprocessing_range_openai(row, args.dataset)
 
-        # Check exact match
+        # check exact match
         if row['value'] == row['response']:
             results.loc[i, 'correct'] = True
 
-        # Check for numbers with <, =, > symbols in both side
+        # check for numbers with <, =, > symbols in both side
         elif row['value'].startswith('<=') and row['response'].startswith('<='):
             results.loc[i, 'correct'] = check_number(row['value'].strip('%<= '), re.sub(r'[a-zA-Z\u2080-\u2089]', '', row['response']).strip('%<= '), percentage=percentage)
         elif row['value'].startswith('>=') and row['response'].startswith('>='):
@@ -123,7 +83,7 @@ if __name__ == '__main__':
         elif row['value'].startswith('>') and row['response'].startswith('>'):
             results.loc[i, 'correct'] = check_number(row['value'].strip('%> '), re.sub(r'[a-zA-Z\u2080-\u2089]', '', row['response']).strip('%> '), percentage=percentage)
 
-        # Check for response with multiple words
+        # check for response with multiple words
         elif ((any(r.isalpha() for r in row['response'])) or (any(c in row['response'] for c in ['(', ')']))) and args.dataset == 'extra':
             row['response'] = re.sub(r"(?<=\d)#(?=[a-zA-Z])", " ", row['response'])
             el = [c.strip('%()') for c in row['response'].split(' ')]
@@ -135,17 +95,16 @@ if __name__ == '__main__':
             row['response'] = row['response'].split(' ')[0]
             results.loc[i, 'correct'] = check_number(row['value'].strip('%~'), row['response'].strip('%~'), percentage=percentage
                                                      )
-        # Check for numbers with ., % symbols and without <, =, > symbols
+        # check for numbers with ., % symbols and without <, =, > symbols
         elif (((any(c in row['value'] or c in row['response'] for c in ['.', '%']) and
               (any(c in row['value'] for c in ['<', '=', '>']) == any(c in row['response'] for c in ['<', '=', '>'])))) or
               any(c in row['value'] or c in row['response'] for c in ['~', ','])):
             results.loc[i, 'correct'] = check_number(row['value'].strip('%<= >~'), row['response'].strip('%<= >~'), percentage=percentage)
 
-        # Otherwise
+        # otherwise
         else:
             results.loc[i, 'correct'] = False
 
     results.to_csv(os.path.join('/'.join(args.filepath.split('/')[:-1]), 'preds_with_match.csv'), index=False)
-    #results.to_csv(f'./results/{args.type}/{args.dataset}/with_match/{model}.csv', index=False)
 
-    calculate_and_save_metrics(results, metrics, os.path.join('/'.join(args.filepath.split('/')[:-1]), 'metrics.csv'))
+    calculate_and_save_metrics(results, metrics, "", os.path.join('/'.join(args.filepath.split('/')[:-1]), 'metrics.csv'))
