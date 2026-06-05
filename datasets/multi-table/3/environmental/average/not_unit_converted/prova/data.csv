@@ -1,0 +1,418 @@
+Question,SQL Query,Method,Table,Constraints,Label
+"What is the average concentration, in Mg, across the values measured by bottle-discrete sampling for biodiversity habitat at the Mekong Vientiane site for the three contaminants glyphosate, zinc (Zn) and sulfate (SO4 2-)?","['SELECT Concentration FROM RiverContaminantMonitoring WHERE MonitoringSite = ""Mekong Vientiane"" AND Contaminant = ""Glyphosate"" AND EcosystemService = ""biodiversity habitat"" AND SamplingMethod = ""bottle discrete"";', 'SELECT Concentration FROM RiverContaminantMonitoring WHERE MonitoringSite = ""Mekong Vientiane"" AND Contaminant = ""Zinc (Zn)"" AND EcosystemService = ""biodiversity habitat"" AND SamplingMethod = ""bottle discrete"";', 'SELECT Concentration FROM RiverContaminantMonitoring WHERE MonitoringSite = ""Mekong Vientiane"" AND Contaminant = ""Sulfate (SO4 2-)"" AND EcosystemService = ""biodiversity habitat"" AND SamplingMethod = ""bottle discrete"";']",average,"Table 0
+
+<table border=""1"" class=""dataframe"">
+  <thead>
+    <tr>
+      <th>river gauge station</th>
+      <th>Amazon Obidos</th>
+      <th>Ganges Farakka</th>
+      <th colspan=""2"" halign=""left"">Mekong Vientiane</th>
+      <th colspan=""2"" halign=""left"">Rhine Lobith</th>
+      <th colspan=""2"" halign=""left"">Thames Northwick</th>
+      <th colspan=""2"" halign=""left"">Yangtze Datong</th>
+    </tr>
+    <tr>
+      <th>priority persistent organic pollutant</th>
+      <th>Glyphosate</th>
+      <th>Glyphosate</th>
+      <th colspan=""2"" halign=""left"">Glyphosate</th>
+      <th colspan=""2"" halign=""left"">Glyphosate</th>
+      <th colspan=""2"" halign=""left"">Glyphosate</th>
+      <th colspan=""2"" halign=""left"">Glyphosate</th>
+    </tr>
+    <tr>
+      <th>grab composite sampling</th>
+      <th>composite 24h</th>
+      <th>bottle discrete</th>
+      <th>bottle discrete</th>
+      <th>composite 24h</th>
+      <th>bottle discrete</th>
+      <th>grab sampling</th>
+      <th>auto-sampler event</th>
+      <th>grab sampling</th>
+      <th>bottle discrete</th>
+      <th>depth-integrated</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Mg</th>
+      <td>Mg (source: official reports)</td>
+      <td>Mg</td>
+      <td>Mg</td>
+      <td>Mg</td>
+      <td>Mg</td>
+      <td>Mg (source: official reports)</td>
+      <td>Mg</td>
+      <td>Mg (source: official reports)</td>
+      <td>Mg</td>
+      <td>Mg</td>
+    </tr>
+    <tr>
+      <th>biodiversity habitat</th>
+      <td>1902.487</td>
+      <td>not available</td>
+      <td>19.215 (source: official reports)</td>
+      <td>1657.057</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>41.721</td>
+      <td>not available</td>
+      <td>not available</td>
+    </tr>
+    <tr>
+      <th>carbon sequestration</th>
+      <td>920.781</td>
+      <td>28.049</td>
+      <td>2428.141</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>27.986</td>
+      <td>1587.97 (source: official reports)</td>
+      <td>not available</td>
+      <td>36.204</td>
+      <td>not available</td>
+    </tr>
+    <tr>
+      <th>flood regulation</th>
+      <td>1511.376</td>
+      <td>11.417</td>
+      <td>35.185 (source: official reports)</td>
+      <td>not available</td>
+      <td>44.531</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>3.784</td>
+    </tr>
+    <tr>
+      <th>nutrient cycling</th>
+      <td>855.007</td>
+      <td>1692.054 (source: official reports)</td>
+      <td>892.698</td>
+      <td>1569.796</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>33.259</td>
+      <td>21.921</td>
+      <td>1818.577 (source: official reports)</td>
+      <td>not available</td>
+    </tr>
+    <tr>
+      <th>recreation &amp; tourism</th>
+      <td>656.735</td>
+      <td>not available</td>
+      <td>2000.083</td>
+      <td>677.595</td>
+      <td>not available</td>
+      <td>1853.491</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+    </tr>
+    <tr>
+      <th>water purification</th>
+      <td>857.240</td>
+      <td>not available</td>
+      <td>33.731</td>
+      <td>49.749</td>
+      <td>1328.961</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>not available</td>
+      <td>3.604</td>
+    </tr>
+  </tbody>
+</table>
+
+Table 1
+
+<table border=""1"" class=""dataframe"">
+  <thead>
+    <tr style=""text-align: right;"">
+      <th></th>
+      <th></th>
+      <th></th>
+      <th>biodiversity habitat</th>
+      <th>carbon sequestration</th>
+      <th>flood regulation</th>
+      <th>nutrient cycling</th>
+      <th>recreation &amp; tourism</th>
+      <th></th>
+      <th></th>
+      <th>water purification</th>
+    </tr>
+    <tr>
+      <th>river gauge station</th>
+      <th>priority persistent organic pollutant</th>
+      <th>grab composite sampling</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Amazon Obidos</th>
+      <th>Zinc (Zn)</th>
+      <th>composite 24h</th>
+      <td>2473.616 Mg</td>
+      <td>1842.735 Mg</td>
+      <td>15.651 Mg</td>
+      <td>2049.844 Mg**</td>
+      <td>84.828 Mg</td>
+      <td></td>
+      <td></td>
+      <td>0.238 Mg</td>
+    </tr>
+    <tr>
+      <th>Ganges Farakka</th>
+      <th>Zinc (Zn)</th>
+      <th>bottle discrete</th>
+      <td>638.521 Mg</td>
+      <td>567.339 Mg</td>
+      <td>28.395 Mg</td>
+      <td>1704.127 Mg</td>
+      <td>5.504 Mg</td>
+      <td></td>
+      <td></td>
+      <td>535.591 Mg**</td>
+    </tr>
+    <tr>
+      <th rowspan=""2"" valign=""top"">Mekong Vientiane</th>
+      <th rowspan=""2"" valign=""top"">Zinc (Zn)</th>
+      <th>bottle discrete</th>
+      <td>0.457 Mg</td>
+      <td>1437.718 Mg</td>
+      <td>800.251 Mg</td>
+      <td>1324.222 Mg</td>
+      <td>457.924 Mg</td>
+      <td></td>
+      <td></td>
+      <td>1264.496 Mg</td>
+    </tr>
+    <tr>
+      <th>composite 24h</th>
+      <td>27.884 Mg</td>
+      <td>1291.102 Mg</td>
+      <td>632.84 Mg</td>
+      <td>246.466 Mg</td>
+      <td>11.229 Mg</td>
+      <td></td>
+      <td></td>
+      <td>22.935 Mg</td>
+    </tr>
+    <tr>
+      <th rowspan=""2"" valign=""top"">Rhine Lobith</th>
+      <th rowspan=""2"" valign=""top"">Zinc (Zn)</th>
+      <th>bottle discrete</th>
+      <td>413.648 Mg\nNote: recorded in [2]</td>
+      <td>216.26 Mg</td>
+      <td>1165.294 Mg</td>
+      <td>1438.068 Mg</td>
+      <td>19.578 Mg</td>
+      <td></td>
+      <td></td>
+      <td>2.404 Mg\nNote: recorded in [3]</td>
+    </tr>
+    <tr>
+      <th>grab sampling</th>
+      <td>35.082 Mg</td>
+      <td>2179.476 Mg</td>
+      <td>0.408 Mg</td>
+      <td>28.489 Mg</td>
+      <td>0.324 Mg</td>
+      <td></td>
+      <td></td>
+      <td>2481.706 Mg</td>
+    </tr>
+    <tr>
+      <th rowspan=""2"" valign=""top"">Thames Northwick</th>
+      <th rowspan=""2"" valign=""top"">Zinc (Zn)</th>
+      <th>auto-sampler event</th>
+      <td>1050.259 Mg</td>
+      <td>203.545 Mg</td>
+      <td>654.447 Mg (see notes)</td>
+      <td>10.992 Mg\nNote: recorded in [1]</td>
+      <td>309.068 Mg</td>
+      <td></td>
+      <td></td>
+      <td>2333.174 Mg</td>
+    </tr>
+    <tr>
+      <th>grab sampling</th>
+      <td>2454.397 Mg**</td>
+      <td>42.454 Mg**</td>
+      <td>1189.722 Mg**</td>
+      <td>1860.616 Mg</td>
+      <td>0.431 Mg</td>
+      <td></td>
+      <td></td>
+      <td>2072.662 Mg</td>
+    </tr>
+    <tr>
+      <th rowspan=""2"" valign=""top"">Yangtze Datong</th>
+      <th rowspan=""2"" valign=""top"">Zinc (Zn)</th>
+      <th>bottle discrete</th>
+      <td>831.545 Mg</td>
+      <td>1650.236 Mg</td>
+      <td>619.064 Mg**</td>
+      <td>607.822 Mg</td>
+      <td>1131.587 Mg**</td>
+      <td></td>
+      <td></td>
+      <td>17.394 Mg</td>
+    </tr>
+    <tr>
+      <th>depth-integrated</th>
+      <td>4.373 Mg**</td>
+      <td>1331.355 Mg</td>
+      <td>28.806 Mg</td>
+      <td>443.795 Mg</td>
+      <td>621.047 Mg</td>
+      <td></td>
+      <td></td>
+      <td>475.844 Mg</td>
+    </tr>
+  </tbody>
+</table>
+
+Table 2
+
+<table border=""1"" class=""dataframe"">
+  <thead>
+    <tr style=""text-align: right;"">
+      <th></th>
+      <th>river gauge station (regulating ecosystem service)</th>
+      <th>Amazon Obidos (flood regulation)</th>
+      <th>Ganges Farakka (carbon sequestration)</th>
+      <th>Mekong Vientiane (biodiversity habitat)</th>
+      <th>Mekong Vientiane (flood regulation)</th>
+      <th>Rhine Lobith (carbon sequestration)</th>
+      <th>Rhine Lobith (recreation &amp; tourism)</th>
+      <th>Thames Northwick (biodiversity habitat)</th>
+      <th>Thames Northwick (recreation &amp; tourism)</th>
+      <th>Yangtze Datong (carbon sequestration)</th>
+      <th>Yangtze Datong (nutrient cycling)</th>
+    </tr>
+    <tr>
+      <th>priority persistent organic pollutant</th>
+      <th>grab composite sampling</th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>Mg</th>
+      <th>Mg</th>
+      <td>Mg</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th rowspan=""6"" valign=""top"">Sulfate (SO4 2-)</th>
+      <th>auto-sampler event</th>
+      <td></td>
+      <td>1807.964</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>1.475</td>
+      <td>2063.252</td>
+      <td>471.777</td>
+      <td>1689.877</td>
+      <td>11.137 (est.)</td>
+    </tr>
+    <tr>
+      <th>bottle discrete</th>
+      <td>7.364</td>
+      <td></td>
+      <td>706.082</td>
+      <td></td>
+      <td>1148.276</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>2052.950</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>composite 24h</th>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>11.92 - Note: recorded in [2]</td>
+      <td>1910.763</td>
+      <td>1245.093</td>
+      <td>572.547 (cf. appendix)</td>
+      <td>2094.172</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>depth-integrated</th>
+      <td>1323.332</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>227.795</td>
+      <td>45.910</td>
+      <td>1602.436</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>grab sampling</th>
+      <td>2058.458</td>
+      <td></td>
+      <td>2012.142</td>
+      <td>1277.500</td>
+      <td>1748.797</td>
+      <td>819.485 (cf. appendix)</td>
+      <td>1278.906</td>
+      <td>910.213 (est.)</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>passive samplers (POCIS)</th>
+      <td></td>
+      <td>20.707</td>
+      <td>1492.589</td>
+      <td>2104.487 (cf. appendix)</td>
+      <td>1782.662</td>
+      <td>2198.910</td>
+      <td></td>
+      <td></td>
+      <td>42.467</td>
+      <td>5.773</td>
+    </tr>
+  </tbody>
+</table>","[{'inter_row_constraints': ['(Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Lead (Pb)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Lead (Pb)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Arsenic (As)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Arsenic (As)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Copper (Cu)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Copper (Cu)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Microplastic fibers"" and SamplingMethod == ""whole water"").Concentration >= (Contaminant == ""Microplastic fibers"" and SamplingMethod == ""dissolved filtered"").Concentration'], 'intra_row_constraints': ['if (Contaminant == ""Mercury (Hg)"") then (Concentration <= 0.001)', 'if (Contaminant == ""Lead (Pb)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Cadmium (Cd)"") then (Concentration <= 0.002)', 'if (Contaminant == ""Arsenic (As)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Copper (Cu)"") then (Concentration <= 1.300)', 'if (Contaminant == ""Zinc (Zn)"") then (Concentration <= 5.000)', 'if (Contaminant == ""Nitrate (NO3-)"") then (Concentration <= 50.000)', 'if (Contaminant == ""Total suspended solids"") then (SamplingMethod != ""dissolved filtered"")', 'if (EcosystemService == ""raw water supply"" and Contaminant == ""Total suspended solids"") then (Concentration <= 100.000)', 'if (SamplingMethod == ""ICP-MS"") then (Contaminant != ""Microplastic fibers"")']}, {'inter_row_constraints': ['(Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Lead (Pb)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Lead (Pb)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Arsenic (As)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Arsenic (As)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Copper (Cu)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Copper (Cu)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Microplastic fibers"" and SamplingMethod == ""whole water"").Concentration >= (Contaminant == ""Microplastic fibers"" and SamplingMethod == ""dissolved filtered"").Concentration'], 'intra_row_constraints': ['if (Contaminant == ""Mercury (Hg)"") then (Concentration <= 0.001)', 'if (Contaminant == ""Lead (Pb)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Cadmium (Cd)"") then (Concentration <= 0.002)', 'if (Contaminant == ""Arsenic (As)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Copper (Cu)"") then (Concentration <= 1.300)', 'if (Contaminant == ""Zinc (Zn)"") then (Concentration <= 5.000)', 'if (Contaminant == ""Nitrate (NO3-)"") then (Concentration <= 50.000)', 'if (Contaminant == ""Total suspended solids"") then (SamplingMethod != ""dissolved filtered"")', 'if (EcosystemService == ""raw water supply"" and Contaminant == ""Total suspended solids"") then (Concentration <= 100.000)', 'if (SamplingMethod == ""ICP-MS"") then (Contaminant != ""Microplastic fibers"")']}, {'inter_row_constraints': ['(Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Mercury (Hg)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Lead (Pb)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Lead (Pb)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Cadmium (Cd)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Arsenic (As)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Arsenic (As)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Copper (Cu)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Copper (Cu)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""dissolved filtered"").Concentration <= (Contaminant == ""Zinc (Zn)"" and SamplingMethod == ""whole water"").Concentration', '(Contaminant == ""Microplastic fibers"" and SamplingMethod == ""whole water"").Concentration >= (Contaminant == ""Microplastic fibers"" and SamplingMethod == ""dissolved filtered"").Concentration'], 'intra_row_constraints': ['if (Contaminant == ""Mercury (Hg)"") then (Concentration <= 0.001)', 'if (Contaminant == ""Lead (Pb)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Cadmium (Cd)"") then (Concentration <= 0.002)', 'if (Contaminant == ""Arsenic (As)"") then (Concentration <= 0.010)', 'if (Contaminant == ""Copper (Cu)"") then (Concentration <= 1.300)', 'if (Contaminant == ""Zinc (Zn)"") then (Concentration <= 5.000)', 'if (Contaminant == ""Nitrate (NO3-)"") then (Concentration <= 50.000)', 'if (Contaminant == ""Total suspended solids"") then (SamplingMethod != ""dissolved filtered"")', 'if (EcosystemService == ""raw water supply"" and Contaminant == ""Total suspended solids"") then (Concentration <= 100.000)', 'if (SamplingMethod == ""ICP-MS"") then (Contaminant != ""Microplastic fibers"")']}]",241.918

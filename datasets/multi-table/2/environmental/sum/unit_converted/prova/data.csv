@@ -1,0 +1,109 @@
+Question,SQL Query,Method,Table,Constraints,Label
+"What is the sum, expressed in Mt.a-1, of the 2018 carbon sequestration rates for project REST-2021-001 in the Gulf of Guinea estuarine network when combining the results from hydrological rewetting and bunding and from assisted natural regeneration?","['SELECT SequestrationRate FROM CoastalPeatlandRestoration WHERE ProjectId = ""REST-2021-001"" AND Region = ""Gulf of Guinea estuarine network"" AND RestorationTechnique = ""hydrological rewetting and bunding"" AND StartYear = ""2018"";', 'SELECT SequestrationRate FROM CoastalPeatlandRestoration WHERE ProjectId = ""REST-2021-001"" AND Region = ""Gulf of Guinea estuarine network"" AND RestorationTechnique = ""assisted natural regeneration"" AND StartYear = ""2018"";']",sum,"Table 0
+
+<table border=""1"" class=""dataframe"">
+  <thead>
+    <tr>
+      <th></th>
+      <th>biogeographic region</th>
+      <th>Boreal peat plateau</th>
+      <th>Gulf of Guinea estuarine network</th>
+    </tr>
+    <tr>
+      <th></th>
+      <th>restoration technique applied</th>
+      <th>hydrological rewetting and bunding</th>
+      <th>hydrological rewetting and bunding</th>
+    </tr>
+    <tr>
+      <th>project identifier</th>
+      <th>project start year</th>
+      <th></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th></th>
+      <th></th>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>carbon sequestration rate (Mt.a-1)</th>
+      <th>carbon sequestration rate (Mt.a-1)</th>
+      <td>carbon sequestration rate (Mt.a-1)</td>
+      <td></td>
+    </tr>
+    <tr>
+      <th rowspan=""2"" valign=""top"">BLUE-2022-027</th>
+      <th>2018</th>
+      <td>0.041</td>
+      <td>0.215</td>
+    </tr>
+    <tr>
+      <th>2024</th>
+      <td>not available</td>
+      <td>not available</td>
+    </tr>
+    <tr>
+      <th></th>
+      <th></th>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>REST-2021-001</th>
+      <th>2018</th>
+      <td>NaN</td>
+      <td>0.613</td>
+    </tr>
+    <tr>
+      <th></th>
+      <th></th>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+Table 1
+
+<table border=""1"" class=""dataframe"">
+  <thead>
+    <tr>
+      <th>restoration technique applied</th>
+      <th colspan=""4"" halign=""left"">assisted natural regeneration</th>
+    </tr>
+    <tr>
+      <th>biogeographic region (project start year)</th>
+      <th>Boreal peat plateau (2018)</th>
+      <th>Broeal epta platea u(2024)</th>
+      <th>Gulf of Guinea estuarine network (2018)</th>
+      <th>Gulf of Guinea estuarine network (2024)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>ton{UK}/​h</th>
+      <td>ton{UK}/h</td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <th>BLUE-2022-027</th>
+      <td>0.674</td>
+      <td>0.674</td>
+      <td>6.062873886721113</td>
+      <td>1.909</td>
+    </tr>
+    <tr>
+      <th>REST-2021-001</th>
+      <td>0.898</td>
+      <td>NaN</td>
+      <td>7.073</td>
+      <td>16.617</td>
+    </tr>
+  </tbody>
+</table>","[{'inter_row_constraints': ['(RestorationTechnique == ""hydrological rewetting and bunding"").SequestrationRate > (RestorationTechnique == ""assisted natural regeneration"").SequestrationRate', '(Region == ""Gulf of Guinea estuarine network"").SequestrationRate > (Region == ""Boreal peat plateau"").SequestrationRate'], 'intra_row_constraints': ['if (RestorationTechnique == ""hydrological rewetting and bunding"") then (SequestrationRate >= 0.040)', 'if (RestorationTechnique == ""assisted natural regeneration"") then (SequestrationRate <= 0.060)', 'if (Region == ""Boreal peat plateau"") then (SequestrationRate <= 0.030)', 'if (Region == ""Gulf of Guinea estuarine network"") then (SequestrationRate >= 0.050)']}, {'inter_row_constraints': ['(RestorationTechnique == ""hydrological rewetting and bunding"").SequestrationRate > (RestorationTechnique == ""assisted natural regeneration"").SequestrationRate', '(Region == ""Gulf of Guinea estuarine network"").SequestrationRate > (Region == ""Boreal peat plateau"").SequestrationRate'], 'intra_row_constraints': ['if (RestorationTechnique == ""hydrological rewetting and bunding"") then (SequestrationRate >= 0.040)', 'if (RestorationTechnique == ""assisted natural regeneration"") then (SequestrationRate <= 0.060)', 'if (Region == ""Boreal peat plateau"") then (SequestrationRate <= 0.030)', 'if (Region == ""Gulf of Guinea estuarine network"") then (SequestrationRate >= 0.050)']}]",0.6759999999999999
