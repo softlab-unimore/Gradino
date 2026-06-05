@@ -11,7 +11,7 @@ Gradino is a multi-table non-relational numerical QA generator. It generates new
 4. with the option to generate parallel (i.e. evidence retrieved from each table, and then aggregated) and sequential (i.e. multi-hop questions across multiple tables) data.  
 5. with total control over the number of tables, attributes, and rows per table.  
 
-The Gradino-generated data described in the paper is available in the `datasets/` directory. The finetuned models will be provided as HuggingFace models upon paper acceptance (due to the anonymity constraints).  
+The Gradino-generated data described in the paper (available in `gradino.pdf`) is available in the `datasets/` directory. The finetuned models will be provided as HuggingFace models upon paper acceptance (due to the anonymity constraints).  
 
 ## How to generate new Table QA instances
 
