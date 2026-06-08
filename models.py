@@ -2316,7 +2316,7 @@ class MTAutoGen:
             return datasets_df, error_logs
 
     def run_real_comparison(self, num_tables: int = 1, question_type: str = "parallel"):
-        from spider_table_extraction import find_densest_pivot, extract_tables_from_sqlite_directories
+        from table_extraction_utils import find_densest_pivot, extract_tables_from_sqlite_directories
         import pickle
 
         tables_dataset = pd.read_csv("pivot_task/exports/qualifying_dense_pivots_verified_moredbs.csv")
