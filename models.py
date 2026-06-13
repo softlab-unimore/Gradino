@@ -1051,6 +1051,8 @@ class MTAutoGen:
             domain=None,
             method=None,
             col_cardinality=10,
+            num_columns: int = 6,
+            perturbations_forced_by_user: list[str] = ["random"]
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
@@ -1062,7 +1064,7 @@ class MTAutoGen:
         # GENERATION SCHEMA
         result = self.generate_relational_table(
             domain=domain,
-            num_columns=6,
+            num_columns=num_columns,
             col_cardinality=col_cardinality,
             canonical_units=sampled_canonical_units,
         )
@@ -1160,7 +1162,7 @@ class MTAutoGen:
             if data is None:
                 continue
 
-            for i, perturbation in enumerate(perturbations_to_apply):
+            """for i, perturbation in enumerate(perturbations_to_apply):
                 new_table = table.copy()
                 new_full_mask = full_mask
                 new_table_types = deepcopy(table_types)
@@ -1235,7 +1237,95 @@ class MTAutoGen:
 
                 if method not in datasets:
                     datasets[method] = {}
-                datasets[method][perturbation.__name__] = (table_hct, data, constraints)
+                datasets[method][perturbation.__name__] = (table_hct, data, constraints)"""
+
+            if "random" in perturbations_forced_by_user:
+                force = False
+            else:
+                force = True
+
+            new_table = table.copy()
+            new_full_mask = full_mask
+            new_table_types = deepcopy(table_types)
+
+            self.perturber.set_random_seed(initial_offset)
+            if "null_perturbation" in perturbations_forced_by_user or (not force and self.rnd.randint(0,1)): # apply null perturbation with 50% chance
+                attrs = {
+                    "table": new_table,
+                    "constraints": list(zip(data["columns"], data["constraint"])),
+                    "value_col": value_col,
+                }
+
+                new_table = self.perturber.null_perturbation(**attrs)
+
+            try:
+                new_table = self.substitute_column_names(new_table, table_attributes_long_view)
+                new_value_col = table_attributes_long[table_attributes.index(value_col)]
+            except Exception as e:
+                continue
+
+            # apply pre-pivot perturbations
+            for perturbation in self.perturber.pre_hct_perturbations:
+                if perturbation.__name__ in perturbations_forced_by_user or (not force and self.rnd.randint(0,1)):
+                    attrs = {
+                        "table": new_table,
+                        "value_col": new_value_col
+                    }
+
+                    new_table, new_value_col = perturbation(**attrs)
+
+            try:
+                # unit change
+                new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
+                                                                                     unit_in_cell=unit_in_cell)
+                table_before_pivot = new_table.copy()
+                if "multiheader_perturbation" in perturbations_forced_by_user or (not force):
+                    # pivot
+                    table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                        aggr=aggr,
+                                                                        unit_in_cell=unit_in_cell, full_mask=new_full_mask)
+                else:
+                    table_hct = new_table.copy()
+
+            except Exception as e:
+                continue
+
+            if table_hct is None:
+                continue
+
+            if "multiheader_perturbation" in perturbations_forced_by_user or (not force):
+                table_hct = self.perturber.restore_needed_cells_after_value_merge(
+                    table_before_pivot=table_before_pivot,
+                    pivot_table=table_hct,
+                    value_col=new_value_col,
+                    full_mask=full_mask,
+                    rows_chosen=rows_chosen,
+                    cols_chosen=cols_chosen,
+                )
+
+            # apply post pivot perturbations
+            for perturbation in self.perturber.post_hct_perturbations:
+                if perturbation.__name__ in perturbations_forced_by_user or (not force and self.rnd.randint(0,1)):
+                    attrs = {
+                        "table": table_hct
+                    }
+
+                    table_hct = perturbation(**attrs)
+
+            if "nl_question" not in data:
+                data["nl_question"] = self.generate_question(table_hct, data, decimals[units[0]], method=method)
+                if data["nl_question"] is None:
+                    continue
+
+                with pd.option_context("display.float_format", lambda x: f"{x:.{decimals[units[0]]}f}"):
+                    data["nl_question"] = self.check_nlquestion_validity(data["nl_question"], data["query"],
+                                                                         table_hct.to_html(index=False), data["label"])
+                if data["nl_question"] is None:
+                    continue
+
+            if method not in datasets:
+                datasets[method] = {}
+            datasets[method]["_".join(perturbations_forced_by_user)] = (table_hct, data, constraints)
 
         return datasets, decimals[units[0]], None
 
@@ -1421,6 +1511,7 @@ class MTAutoGen:
             num_columns=6,
             num_tables=None,
             method=None,
+            perturbations_forced_by_user: list[str] = ["random"]
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
@@ -1434,7 +1525,7 @@ class MTAutoGen:
         else:
             num_tables_list = [2, 3, 5, 10, 20]
 
-        col_cardinality = num_tables_list[-1]
+        col_cardinality = max(10,num_tables_list[-1])
 
         # generation of relational table
         result = self.generate_relational_table(
@@ -1644,12 +1735,17 @@ class MTAutoGen:
 
                 # adding a sample with all perturbations randomly applied
                 for apply_unit_conversions in [True, False]:
+                    if "random" not in perturbations_forced_by_user:
+                        if "apply_unit_conversions" in perturbations_forced_by_user and not apply_unit_conversions:
+                            continue
+                        if "apply_unit_conversions" not in perturbations_forced_by_user and apply_unit_conversions:
+                            continue
                     new_table = table.copy()
                     new_full_mask = full_mask
                     new_table_types = deepcopy(table_types)
 
                     self.perturber.set_random_seed(initial_offset+i)
-                    if rnd_apply_nan == 1: # apply perturbation with 50% chance
+                    if ("random" in perturbations_forced_by_user and rnd_apply_nan == 1) or "null_perturbation" in perturbations_forced_by_user: # apply perturbation with 50% chance
                         attrs = {
                             "table": new_table,
                             "constraints": list(zip(data["columns"], data["constraint"])), #{k: v for k, v in zip(data["columns"], data["constraint"])},
@@ -1710,7 +1806,7 @@ class MTAutoGen:
                         break
 
                     for num_pert, perturbation in enumerate(self.perturber.pre_hct_perturbations):
-                        if rnd_apply_pre[num_pert] == 1 and i != 0:
+                        if ("random" in perturbations_forced_by_user and rnd_apply_pre[num_pert] == 1 and i != 0) or perturbation.__name__ in perturbations_forced_by_user:
                             attrs = {
                                 "table": new_table,
                                 "value_col": new_value_col
@@ -1722,9 +1818,12 @@ class MTAutoGen:
                         new_table, new_value_col = self.perturber.insert_unit_of_measurement(new_table, new_value_col, new_units,
                                                                                              unit_in_cell=unit_in_cell)
                         table_before_pivot = new_table.copy()
-                        table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
-                                                                            aggr=aggr,
-                                                                            unit_in_cell=unit_in_cell, full_mask=new_full_mask)
+                        table_hct = new_table.copy()
+                        option = None
+                        if "random" in perturbations_forced_by_user or "multiheader_perturbation" in perturbations_forced_by_user:
+                            table_hct, rows_chosen, cols_chosen, option = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                                aggr=aggr,
+                                                                                unit_in_cell=unit_in_cell, full_mask=new_full_mask)
                     except Exception as e:
                         good = False
                         break
@@ -1733,19 +1832,21 @@ class MTAutoGen:
                         good = False
                         break
 
-                    table_hct = self.perturber.restore_needed_cells_after_value_merge(
-                        table_before_pivot=table_before_pivot,
-                        pivot_table=table_hct,
-                        value_col=new_value_col,
-                        full_mask=full_mask,
-                        rows_chosen=rows_chosen,
-                        cols_chosen=cols_chosen,
-                    )
+                    if "random" in perturbations_forced_by_user or "multiheader_perturbation" in perturbations_forced_by_user:
+                        table_hct = self.perturber.restore_needed_cells_after_value_merge(
+                            table_before_pivot=table_before_pivot,
+                            pivot_table=table_hct,
+                            value_col=new_value_col,
+                            full_mask=full_mask,
+                            rows_chosen=rows_chosen,
+                            cols_chosen=cols_chosen,
+                        )
 
                     for num_pert, perturbation in enumerate(self.perturber.post_hct_perturbations):
                         if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
                             continue
-                        if rnd_apply_post[num_pert] == 1:
+
+                        if ("random" in perturbations_forced_by_user and rnd_apply_post[num_pert] == 1) or perturbation.__name__ in perturbations_forced_by_user:
                             attrs = {
                                 "table": table_hct
                             }
@@ -1783,6 +1884,8 @@ class MTAutoGen:
                     [data_unit_converted[str(num_tables)], data_not_unit_converted[str(num_tables)]],
                     [view_constraints_tot_unit[str(num_tables)], view_constraints_tot_not_unit[str(num_tables)]]
             ):
+                if len(list_of_table_hct) == 0:
+                    continue
                 for method_name in method_list:
                     if method_name in ["extractive", "comparative", "percentage_change"]:
                         continue
@@ -1829,6 +1932,7 @@ class MTAutoGen:
             col_cardinality=8,
             num_columns=21,
             method=None,
+            perturbations_forced_by_user: list[str] = ["random"]
     ):
         """
         we use this function to generate dataset samples for multiple question types (extractive, comparative etc.) for the same tables,
@@ -2015,7 +2119,7 @@ class MTAutoGen:
                         new_full_mask = full_mask
                         new_table_types = deepcopy(table_types)
 
-                        if self.rnd.randint(0,1) == 1: # apply null perturbation with 50% chance
+                        if ("random" in perturbations_forced_by_user and self.rnd.randint(0,1) == 1) or "null_perturbation" in perturbations_forced_by_user: # apply null perturbation with 50% chance
                             attrs = {
                                 "table": new_table,
                                 "constraints": list(zip(data["columns"], data["constraint"])),
@@ -2035,7 +2139,9 @@ class MTAutoGen:
                         pos_col1, pos_col2 = None, None
                         # apply pre perturbations
                         for perturbation in self.perturber.pre_hct_perturbations:
-                            if self.rnd.randint(0,1) == 1 and i != 0:
+                            if i == 0:
+                                continue
+                            if ("random" in perturbations_forced_by_user and self.rnd.randint(0,1) == 1 and i != 0) or perturbation.__name__ in perturbations_forced_by_user:
                                 attrs = {
                                     "table": new_table,
                                     "value_col": new_value_col,
@@ -2056,9 +2162,12 @@ class MTAutoGen:
                                                                                                      unit_in_cell=unit_in_cell)
 
                             table_before_pivot = new_table.copy()
-                            table_hct, rows_chosen, cols_chosen, option, kept_rows, kept_cols, kept_full = self.perturber.multiheader_perturbation(new_table, new_value_col,
-                                                                                aggr=aggr, fk=True,
-                                                                                unit_in_cell=unit_in_cell, full_mask=new_full_mask)
+                            table_hct = new_table.copy()
+                            option = None
+                            if "random" in perturbations_forced_by_user or "multiheader_perturbation" in perturbations_forced_by_user:
+                                table_hct, rows_chosen, cols_chosen, option, kept_rows, kept_cols, kept_full = self.perturber.multiheader_perturbation(new_table, new_value_col,
+                                                                                    aggr=aggr, fk=True,
+                                                                                    unit_in_cell=unit_in_cell, full_mask=new_full_mask)
                         except:
                             good = False
                             errors.append("error pivoting")
@@ -2091,7 +2200,8 @@ class MTAutoGen:
                         for perturbation in self.perturber.post_hct_perturbations:
                             if perturbation == self.perturber.insert_blank_columns and option == 0: # may cancel unit of measurement
                                 continue
-                            if self.rnd.randint(0,1) == 1:
+
+                            if ("random" in perturbations_forced_by_user and self.rnd.randint(0,1) == 1) or perturbation.__name__ in perturbations_forced_by_user:
                                 attrs = {
                                     "table": table_hct
                                 }
@@ -2150,7 +2260,17 @@ class MTAutoGen:
 
         return datasets, decimals[units[0]], "\n".join(errors) if len(errors) > 0 else None
 
-    def run_generation(self, num_tables: int = -1, num_samples: int = 1, domain: str | None = None, sequential: bool = False, method: str | None = None, col_cardinality: int = 8, num_columns: int = 6):
+    def run_generation(
+            self,
+            num_tables: int = -1,
+            num_samples: int = 1,
+            domain: str | None = None,
+            sequential: bool = False,
+            method: str | None = None,
+            col_cardinality: int = 8,
+            num_columns: int = 6,
+            perturbations: list[str] = ["random"]
+        ):
         if num_tables == 1:
             datasets, datasets_df, error_logs = {}, {}, []
             perturbations_to_apply = [self.perturber.null_perturbation] + \
@@ -2169,7 +2289,7 @@ class MTAutoGen:
                     datasets[method][perturbation_name] = []
 
             for _ in tqdm(range(num_samples), desc="Generating samples..."):
-                result, decimals, error_log = self.run_one_table_ablations(domain=domain, method=method, col_cardinality=col_cardinality, num_columns=num_columns)
+                result, decimals, error_log = self.run_one_table_ablations(domain=domain, method=method, col_cardinality=col_cardinality, num_columns=num_columns, perturbations_forced_by_user=perturbations)
                 if result is None:
                     print(f"Error in sample generation: {error_log}")
                     error_logs.append(error_log)
@@ -2211,6 +2331,7 @@ class MTAutoGen:
                     ranges = [num_tables]
                 else:
                     ranges = [2,3,5,10,20]
+                    #ranges = [2,3]
             else:
                 perturbation_names = ["sequential"]
                 if num_tables != -1:
@@ -2235,20 +2356,20 @@ class MTAutoGen:
 
             # generating samples...
             for _ in tqdm(range(num_samples), desc="Generating samples..."):
-                try:
-                    if num_tables != -1:
-                        if sequential:
-                            result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, num_tables=num_tables, method=method, col_cardinality=col_cardinality, num_columns=num_columns)
-                        else:
-                            result, decimals, error_log = self.run_multi_table_ablations(domain=domain, num_tables=num_tables, method=method, num_columns=num_columns)
+                #try:
+                if num_tables != -1:
+                    if sequential:
+                        result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, num_tables=num_tables, method=method, col_cardinality=col_cardinality, num_columns=num_columns, perturbations_forced_by_user=perturbations)
                     else:
-                        if sequential:
-                            result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, method=method)
-                        else:
-                            result, decimals, error_log = self.run_multi_table_ablations(domain=domain, method=method)
+                        result, decimals, error_log = self.run_multi_table_ablations(domain=domain, num_tables=num_tables, method=method, num_columns=num_columns, perturbations_forced_by_user=perturbations)
+                else:
+                    if sequential:
+                        result, decimals, error_log = self.run_multi_table_ablations_fk(domain=domain, method=method)
+                    else:
+                        result, decimals, error_log = self.run_multi_table_ablations(domain=domain, method=method)
 
-                except:
-                    continue
+                #except:
+                #    continue
 
                 if result is None:
                     print(f"Error in sample generation: {error_log}")
@@ -2264,34 +2385,34 @@ class MTAutoGen:
                 else:
                     method_list = SQL_TEMPLATES
 
-                for num_tables in ranges:
-                    for method in method_list:
-                        if not sequential and method in ["extractive", "comparative", "percentage_change"]: # skipping single-table queries
+                for num_tables_r in ranges:
+                    for method_name in method_list:
+                        if not sequential and method_name in ["extractive", "comparative", "percentage_change"]: # skipping single-table queries
                             continue
 
                         for perturbation_name in perturbation_names:
                             try:
-                                if method in result[str(num_tables)] and perturbation_name in result[str(num_tables)][method]:
+                                if method_name in result[str(num_tables_r)] and perturbation_name in result[str(num_tables_r)][method_name]:
                                     text = ""
-                                    for i, table in enumerate(result[str(num_tables)][method][perturbation_name][0]):
-                                        with pd.option_context("display.float_format", lambda x: f"{x:.{result[str(num_tables)][method][perturbation_name][1]['decimals'][i]}f}"):
+                                    for i, table in enumerate(result[str(num_tables_r)][method_name][perturbation_name][0]):
+                                        with pd.option_context("display.float_format", lambda x: f"{x:.{result[str(num_tables_r)][method_name][perturbation_name][1]['decimals'][i]}f}"):
                                             text += f"Table {i}\n\n{table.to_html(index=True)}\n\n"
                                     text = text.strip()
 
-                                    datasets[str(num_tables)][method][perturbation_name].append([
-                                        result[str(num_tables)][method][perturbation_name][1]["nl_question"],
-                                        result[str(num_tables)][method][perturbation_name][1]["query"],
-                                        method,
+                                    datasets[str(num_tables_r)][method_name][perturbation_name].append([
+                                        result[str(num_tables_r)][method_name][perturbation_name][1]["nl_question"],
+                                        result[str(num_tables_r)][method_name][perturbation_name][1]["query"],
+                                        method_name,
                                         text,
-                                        result[str(num_tables)][method][perturbation_name][2],  # constraints
-                                        result[str(num_tables)][method][perturbation_name][1]["label"],
+                                        result[str(num_tables_r)][method_name][perturbation_name][2],  # constraints
+                                        result[str(num_tables_r)][method_name][perturbation_name][1]["label"],
                                     ])
                             except:
                                 continue
                 print("Current lengths:")
                 for nt in datasets:
                     for m in datasets[nt]:
-                        if "unit_converted" in datasets[nt][m]:
+                        if "unit_converted" in datasets[nt][m] and len(datasets[nt][m]["unit_converted"]) > 0:
                             print(f"\t {nt} tables: {len(datasets[nt][m]["unit_converted"])}")
                         else:
                             print(f"\t {nt} tables: {len(datasets[nt][m]["sequential"])}")
@@ -2316,8 +2437,8 @@ class MTAutoGen:
             return datasets_df, error_logs
 
     def run_real_comparison(self, num_tables: int = 1, question_type: str = "parallel"):
-        from table_extraction_utils import find_densest_pivot, extract_tables_from_sqlite_directories
-        import pickle
+        #from table_extraction_utils import find_densest_pivot, extract_tables_from_sqlite_directories
+        #import pickle
 
         tables_dataset = pd.read_csv("pivot_task/exports/qualifying_dense_pivots_verified_moredbs.csv")
         tables_dataset = pd.concat(

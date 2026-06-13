@@ -8,3 +8,4 @@ outputs/
 containers/
 singularity_access_token.txt
 results/
+datasets/

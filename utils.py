@@ -22,6 +22,7 @@ def get_args():
     parser.add_argument('--num_samples', type=int, default=50, help='Number of samples to generate')
     parser.add_argument('--col_cardinality', type=int, default=20, help='Number of samples to generate')
     parser.add_argument('--num_columns', type=int, default=21, help='Number of samples to generate')
+    parser.add_argument("--perturbation_types", default=["random"], nargs="+", type=str, help="List of perturbation types to apply")
 
     args = vars(parser.parse_args())
 
